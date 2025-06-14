@@ -1,4 +1,4 @@
-FROM henry0731/debian
+FROM oxzk/debian
 
 # COPY code-server/docker-entrypoint.sh entrypoint.sh
 COPY code-server/install.sh /tmp/install.sh
