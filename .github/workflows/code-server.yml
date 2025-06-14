@@ -2,7 +2,7 @@ name: code-server
 
 on:
   push:
-    branches: [ dev ]
+    branches: [ main ]
     paths:
       - 'code-server/**'
       - '**/code-server.yml'
