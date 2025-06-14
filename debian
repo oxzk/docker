@@ -1,0 +1,27 @@
+FROM debian:bookworm
+
+ENV TIME_ZONE=Asia/Shanghai
+
+# && echo "fs.file-max=65535" >> /etc/sysctl.conf \
+# && echo 'alias ll="ls -la"' >> /etc/profile \
+RUN apt-get update && apt-get install -y locales ntp && \
+    sed -i -e 's/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen && \
+    sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen zh_CN.UTF-8 && \
+    locale-gen en_US.UTF-8 && \
+    update-locale LANG=zh_CN.UTF-8 LANGUAGE=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8 && \
+    rm -rf /etc/localtime && ln -sf /usr/share/zoneinfo/${TIME_ZONE} /etc/localtime \
+    && ulimit -v unlimited \
+    && echo "* soft nproc 65535" >> /etc/security/limits.conf \
+    && echo "* hard nproc 65535" >> /etc/security/limits.conf \
+    && echo "* soft nofile 65535" >> /etc/security/limits.conf \
+    && echo "* hard nofile 65535" >> /etc/security/limits.conf \
+    && echo 'export LANG=zh_CN.UTF-8' >> ~/.bashrc \
+    && echo 'export LANGUAGE=zh_CN.UTF-8' >> ~/.bashrc \
+    && echo 'export LC_ALL=zh_CN.UTF-8' >> ~/.bashrc \
+    && /bin/bash -c 'source ~/.bashrc' \
+    && date \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/tmp/* 
+    
+CMD ["bash"]
