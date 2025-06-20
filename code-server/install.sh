@@ -230,9 +230,11 @@ deployctl --version
 curl -fsSL https://get.pnpm.io/install.sh | zsh -
 export PNPM_HOME="/root/.local/share/pnpm"
 export PATH="$PNPM_HOME:$PATH"
-pnpm env use 20 --global
+pnpm env use 22 --global
+pnpm add -g edgeone
 # pnpm add -g wrangler@latest
 # pnpm add -g eslint
+# pnpm add supabase --save-dev --allow-build=supabase
 
 git config --global user.name "oxzk"
 git config --global user.email "riverecho520@gmail.com"
@@ -248,16 +250,13 @@ set wrap
 set ruler
 EOF
 
-cat >~/.local/share/code-server/User/argv.json <<EOF
-{ "locale":"zh-cn" }
-EOF
-
 cat >~/.local/share/code-server/User/settings.json <<EOF
 {
-    "editor.fontFamily": "JetBrains Mono, Menlo, Monaco, Courier New, monospace",
+    "editor.fontFamily": "JetBrains Mono, Menlo, Monaco, Consolas, 'Courier New', monospace",
     "window.menuBarVisibility": "classic",
     "editor.fontSize": 22,
     "editor.wordWrap": "on",
+    "terminal.integrated.fontSize": 18,
     "workbench.preferredDarkColorTheme": "Dracula Theme",
     "workbench.preferredLightColorTheme": "Dracula Theme",
     "workbench.iconTheme": "material-icon-theme",
