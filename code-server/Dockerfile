@@ -30,4 +30,4 @@ RUN chmod +x /tmp/install.sh \
     && /bin/bash -c '/tmp/install.sh' \
     && echo "root:$PASSWORD" | chpasswd
 
-CMD /usr/sbin/sshd -D && code-server --bind-addr 0.0.0.0:"${PORT}" --app-name code-server --disable-telemetry --auth password /workspace
+CMD /usr/sbin/sshd -D & code-server --bind-addr 0.0.0.0:"${PORT}" --app-name code-server --disable-telemetry --auth password /workspace
