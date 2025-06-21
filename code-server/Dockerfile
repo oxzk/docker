@@ -2,7 +2,7 @@ FROM oxzk/debian
 
 # COPY code-server/docker-entrypoint.sh entrypoint.sh
 COPY code-server/install.sh /tmp/install.sh
-# COPY code-server/market.json /tmp/market.json
+COPY code-server/market.json /tmp/market.json
 
 RUN apt-get update && apt-get install --no-install-recommends ca-certificates openssh-client procps jq zsh git unzip vim wget curl net-tools iputils-ping neofetch python3 python3.11-venv -y
 
