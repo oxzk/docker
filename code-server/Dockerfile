@@ -19,7 +19,7 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh \
     && code-server --install-extension ms-python.python \
     && code-server --install-extension ms-python.black-formatter \
     # && code-server --install-extension vue.volar \
-    code-server --install-extension foxundermoon.shell-format \
+    && code-server --install-extension foxundermoon.shell-format \
     && code-server --install-extension pkief.material-icon-theme \
     # && code-server --install-extension k--kato.intellij-idea-keybindings \
     && code-server --install-extension golang.go \
