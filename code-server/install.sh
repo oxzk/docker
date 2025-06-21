@@ -265,7 +265,6 @@ cat >~/.local/share/code-server/User/settings.json <<EOF
     "editor.minimap.enabled": false,
     "editor.pasteAs.enabled": false,
     "editor.formatOnSave": true,
-    "deno.enable": true,
     "[shellscript]": {
         "editor.defaultFormatter": "foxundermoon.shell-format"
     },
@@ -307,6 +306,12 @@ python3 -m venv .venv
 # . .venv/bin/activate
 # pip install playwright sanic requests aioredis aiohttp pysocks python-dotenv
 # playwright install chrome
+
+mkdir /var/run/sshd
+echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+echo 'UsePAM no' >> /etc/ssh/sshd_config
+# echo "root:$PASSWORD" | chpasswd
 
 apt-get purge make gcc g++ -y
 apt-get autoremove -y
