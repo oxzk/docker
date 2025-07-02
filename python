@@ -1,0 +1,21 @@
+FROM oxzk/debian
+
+ENV PYTHON_VERSION=3.11.11 DEBIAN_FRONTEND=noninteractive
+ENV PATH=$PATH:/usr/local/python3/bin
+
+RUN apt-get update -y \
+    && apt-get --no-install-recommends install -y wget build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libbz2-dev \
+    && wget -c --progress=bar:force --no-check-certificate https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz \
+    && tar -xf Python-${PYTHON_VERSION}.tar.xz && rm -f Python-${PYTHON_VERSION}.tar.xz && cd Python-${PYTHON_VERSION} \
+    && ./configure --prefix=/usr/local/python3 --enable-optimizations --with-lto --enable-loadable-sqlite-extensions && make altinstall \
+    && ln -sf /usr/local/python3/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/local/python3/bin/python3.11 /usr/bin/python \
+    # && ln -sf /usr/local/python3/bin/pip3.11 /usr/bin/pip3 \
+    # && ln -sf /usr/local/python3/bin/pip3.11 /usr/bin/pip \
+    # && python --version && pip install --upgrade pip && pip --version \
+    && apt-get purge wget make gcc g++ -y \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && cd .. && rm -rf Python-${PYTHON_VERSION} 
+    
+CMD ["python"]
