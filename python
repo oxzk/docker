@@ -1,6 +1,6 @@
 FROM oxzk/debian
 
-ENV PYTHON_VERSION=3.11.11 DEBIAN_FRONTEND=noninteractive
+ENV PYTHON_VERSION=3.11.10 DEBIAN_FRONTEND=noninteractive
 ENV PATH=$PATH:/usr/local/python3/bin
 
 RUN apt-get update -y \
@@ -10,9 +10,9 @@ RUN apt-get update -y \
     && ./configure --prefix=/usr/local/python3 --enable-optimizations --with-lto --enable-loadable-sqlite-extensions && make altinstall \
     && ln -sf /usr/local/python3/bin/python3.11 /usr/bin/python3 \
     && ln -sf /usr/local/python3/bin/python3.11 /usr/bin/python \
-    # && ln -sf /usr/local/python3/bin/pip3.11 /usr/bin/pip3 \
-    # && ln -sf /usr/local/python3/bin/pip3.11 /usr/bin/pip \
-    # && python --version && pip install --upgrade pip && pip --version \
+    && ln -sf /usr/local/python3/bin/pip3.11 /usr/bin/pip3 \
+    && ln -sf /usr/local/python3/bin/pip3.11 /usr/bin/pip \
+    && python --version && pip install --upgrade pip && pip --version \
     && apt-get purge wget make gcc g++ -y \
     && apt-get autoremove -y \
     && apt-get clean \

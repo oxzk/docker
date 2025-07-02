@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # timeout-minutes: 90
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -37,6 +37,6 @@ jobs:
         with:
           push: true
           file: ./python
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: |
             oxzk/python:latest
