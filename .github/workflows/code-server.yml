@@ -1,6 +1,8 @@
 name: code-server
 
 on:
+  schedule:
+    - cron: '10 0 * * 1'
   push:
     branches: [ main ]
     paths:

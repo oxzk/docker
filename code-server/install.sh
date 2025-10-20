@@ -232,8 +232,9 @@ export PNPM_HOME="/root/.local/share/pnpm"
 export PATH="$PNPM_HOME:$PATH"
 pnpm env use 22 --global
 pnpm add -g edgeone
-# pnpm add -g wrangler@latest
-# pnpm add -g eslint
+pnpm add -g @openai/codex
+pnpm add -g wrangler@latest
+pnpm add -g @anthropic-ai/claude-code
 # pnpm add supabase --save-dev --allow-build=supabase
 
 git config --global user.name "oxzk"
