@@ -237,7 +237,7 @@ pnpm add -g wrangler@latest
 pnpm add -g @anthropic-ai/claude-code
 # pnpm add supabase --save-dev --allow-build=supabase
 
-git config --global user.name "oxzk"
+git config --global user.name "riverecho520"
 git config --global user.email "riverecho520@gmail.com"
 git config --global pull.rebase false
 git config --global init.defaultBranch main
