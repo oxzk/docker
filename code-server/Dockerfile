@@ -23,7 +23,8 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh \
     && code-server --install-extension pkief.material-icon-theme \
     # && code-server --install-extension k--kato.intellij-idea-keybindings \
     && code-server --install-extension golang.go \
-    # && code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans \
+    && code-server --install-extension openai.chatgpt \
+    && code-server --install-extension anthropic.claude-code \
     && echo done
 
 RUN chmod +x /tmp/install.sh \
