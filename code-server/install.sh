@@ -211,9 +211,9 @@ echo 'alias guc="git commit -am"' >>~/.zshrc
 echo 'export LANG=zh_CN.UTF-8' >>~/.zshrc
 echo 'export LANGUAGE=zh_CN.UTF-8' >>~/.zshrc
 echo 'export SHELL=/bin/zsh' >>~/.zshrc
-echo 'DRACULA_DISPLAY_CONTEXT=1' >>~/.zshrc
-echo 'DRACULA_DISPLAY_FULL_CWD=1' >>~/.zshrc
-echo 'DRACULA_DISPLAY_GIT=1' >>~/.zshrc
+# echo 'DRACULA_DISPLAY_CONTEXT=1' >>~/.zshrc
+# echo 'DRACULA_DISPLAY_FULL_CWD=1' >>~/.zshrc
+# echo 'DRACULA_DISPLAY_GIT=1' >>~/.zshrc
 echo 'export GOPATH=~/.local/share/go' >>~/.zshrc
 echo 'export DENO_DEPLOY_TOKEN=""' >>~/.zshrc
 echo 'export PATH=/usr/local/go/bin:$PATH' >>~/.zshrc
@@ -235,6 +235,7 @@ pnpm add -g edgeone
 pnpm add -g @openai/codex
 pnpm add -g wrangler@latest
 pnpm add -g @anthropic-ai/claude-code
+pnpm add -g @musistudio/claude-code-router
 # pnpm add supabase --save-dev --allow-build=supabase
 
 git config --global user.name "riverecho520"
