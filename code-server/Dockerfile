@@ -4,7 +4,7 @@ FROM oxzk/debian
 COPY code-server/install.sh /tmp/install.sh
 # COPY code-server/market.json /tmp/market.json
 
-ENV PORT=9091
+ENV SERVER_PORT=9091
 ENV PASSWORD=code001
 
 RUN apt-get update && apt-get install --no-install-recommends ca-certificates openssh-client procps jq zsh git unzip vim wget curl net-tools iputils-ping neofetch python3 python3.11-venv -y
@@ -30,4 +30,4 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh \
 RUN chmod +x /tmp/install.sh \
     && /bin/bash -c '/tmp/install.sh' 
 
-CMD code-server --bind-addr 0.0.0.0:"${PORT}" --app-name code-server --disable-telemetry --auth password /workspace
+CMD code-server --bind-addr 0.0.0.0:"${SERVER_PORT}" --app-name code-server --disable-telemetry --auth password /workspace

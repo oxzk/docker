@@ -235,7 +235,7 @@ pnpm add -g edgeone
 pnpm add -g @openai/codex
 pnpm add -g wrangler@latest
 pnpm add -g @anthropic-ai/claude-code
-pnpm add -g @musistudio/claude-code-router
+# pnpm add -g @musistudio/claude-code-router
 # pnpm add supabase --save-dev --allow-build=supabase
 
 git config --global user.name "riverecho520"
