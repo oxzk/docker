@@ -1,10 +1,10 @@
 FROM oxzk/debian
 
-ENV PYTHON_VERSION=3.11.10 DEBIAN_FRONTEND=noninteractive
+ENV PYTHON_VERSION=3.11.14 DEBIAN_FRONTEND=noninteractive
 ENV PATH=$PATH:/usr/local/python3/bin
 
 RUN apt-get update -y \
-    && apt-get --no-install-recommends install -y wget build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libbz2-dev \
+    && apt-get --no-install-recommends install -y wget build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libbz2-dev libsqlite3-dev \
     && wget -c --progress=bar:force --no-check-certificate https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz \
     && tar -xf Python-${PYTHON_VERSION}.tar.xz && rm -f Python-${PYTHON_VERSION}.tar.xz && cd Python-${PYTHON_VERSION} \
     && ./configure --prefix=/usr/local/python3 --enable-optimizations --with-lto --enable-loadable-sqlite-extensions && make altinstall \
