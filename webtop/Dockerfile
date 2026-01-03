@@ -14,7 +14,7 @@ ENV TITLE="Ubuntu"
 ARG DEBIAN_FRONTEND="noninteractive"
 
 # prevent Ubuntu's firefox stub from being installed
-COPY /root/etc/apt/preferences.d/mozilla /etc/apt/preferences.d/mozilla
+COPY webtop/root/etc/apt/preferences.d/mozilla /etc/apt/preferences.d/mozilla
 
 RUN \
   echo "**** add package sources ****" && \
