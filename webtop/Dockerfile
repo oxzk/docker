@@ -80,7 +80,7 @@ RUN \
     /tmp/*
 
 # add local files
-COPY /root /
+COPY webtop/root /
 
 # ports and volumes
 EXPOSE 3000
