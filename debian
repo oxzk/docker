@@ -2,7 +2,7 @@ FROM debian:bookworm
 
 ENV TIME_ZONE=Asia/Shanghai DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y wget curl ca-certificates vim locales ntp net-tools fastfetch openssh-server \
+RUN apt-get update && apt-get install -y wget curl ca-certificates vim locales ntp net-tools neofetch openssh-server \
     && sed -i -e 's/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen \
     && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen zh_CN.UTF-8 \
