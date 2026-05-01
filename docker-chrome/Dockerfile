@@ -37,7 +37,7 @@ RUN \
   curl -LsSf https://astral.sh/uv/install.sh | sh && \
   uv python install 3.11 && \
   wget -q https://github.com/fatedier/frp/releases/download/v0.68.0/frp_0.68.0_linux_amd64.tar.gz -O /tmp/frp.tar.gz && \
-  tar -xzf /tmp/frp.tar.gz -C /tmp/ \
+  tar -xzf /tmp/frp.tar.gz -C /tmp/ && \
   mv /tmp/frp_*/frpc /usr/local/bin/frpc && \
   echo "**** cleanup ****" && \
   apt-get autoclean && \
