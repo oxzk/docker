@@ -55,7 +55,6 @@ RUN mkdir -p /app/user_data
 
 # 4. 复制启动脚本并授权
 COPY chrome/entrypoint.sh /entrypoint.sh
-COPY chrome/frpc.toml /etc/frpc.toml
 RUN chmod +x /entrypoint.sh
 
 # 暴露端口

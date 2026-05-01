@@ -1,9 +1,9 @@
 serverAddr = "35.229.198.112"
 serverPort = 7000
-user = "4ixySASGRMBSY51P2vphHDng"
+user = ""
 
 # 认证配置
-auth.token = "ChmlFrpToken"
+auth.token = ""
 
 # 日志配置
 log.to = "/var/log/frpc.log"
