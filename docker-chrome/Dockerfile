@@ -41,6 +41,7 @@ RUN \
   mv /tmp/frp_*/frpc /usr/local/bin/frpc && \
   echo "**** cleanup ****" && \
   apt-get autoclean && \
+  mkdir -p /app/user_data && \
   rm -rf \
     /config/.cache \
     /var/lib/apt/lists/* \
@@ -48,7 +49,7 @@ RUN \
     /tmp/*
 
 # add local files
-COPY /root /
+COPY docker-chrome/root /
 
 # ports and volumes
 EXPOSE 3000
