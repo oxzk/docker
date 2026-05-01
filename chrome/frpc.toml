@@ -11,7 +11,7 @@ log.level = "info"
 log.maxDays = 3
 
 [[proxies]]
-name = "vnc1"
+name = "chrome"
 type = "tcp"
 localIP = "127.0.0.1"
 localPort = 31110

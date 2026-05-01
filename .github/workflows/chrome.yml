@@ -1,4 +1,4 @@
-name: webtop
+name: chrome
 
 on:
   schedule:
@@ -39,6 +39,6 @@ jobs:
         with:
           push: true
           file: ./chrome/Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: |
             oxzk/chrome:latest
