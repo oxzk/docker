@@ -6,8 +6,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'webtop/**'
-      - '**/webtop.yml'
+      - 'chrome/**'
+      - '**/chrome.yml'
 
 jobs:
   build:
@@ -38,7 +38,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          file: ./webtop/Dockerfile
+          file: ./chrome/Dockerfile
           platforms: linux/amd64
           tags: |
-            oxzk/webtop:latest
+            oxzk/chrome:latest
