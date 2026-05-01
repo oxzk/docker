@@ -1,0 +1,20 @@
+#!/bin/bash
+
+BIN=/usr/bin/google-chrome
+
+# Cleanup
+if pgrep chrome > /dev/null;then
+  rm -f $HOME/.config/google-chrome/Singleton*
+fi
+
+${BIN} \
+  --remote-debugging-port=9222 \
+  --remote-debugging-address=0.0.0.0 \
+  --remote-allow-origins='*' \
+  --no-first-run \
+  --no-sandbox \
+  --password-store=basic \
+  --start-maximized \
+  --test-type \
+  --user-data-dir=/app/user_data
+   "$@" > /dev/null 2>&1

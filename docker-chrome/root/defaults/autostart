@@ -1,0 +1,22 @@
+#!/bin/bash
+
+export BROWSER_EXECUTABLE_PATH=/usr/bin/google-chrome
+
+if [ -f /usr/local/bin/frpc ] && [ -f /etc/frpc.toml ]; then
+    echo "[frpc] Starting frpc for 3000"
+    /usr/local/bin/frpc -c /etc/frpc.toml &
+    sleep 1
+    if pgrep -x frpc > /dev/null; then
+        echo "[frpc] frpc is running"
+    else
+        echo "[frpc] WARNING: frpc may not have started correctly"
+    fi
+fi
+
+if [ $# -eq 0 ]; then
+    wrapped-chrome ${CHROME_CLI}
+    # tail -f /dev/null
+else
+    echo "Running command: $@"
+    exec "$@"
+fi
