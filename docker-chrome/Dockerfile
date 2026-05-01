@@ -11,7 +11,7 @@ LABEL maintainer="thelamer"
 
 # title
 ENV TITLE=Chrome \
-    PATH="$HOME/.local/bin:$PATH"
+    PATH="$HOME/.local/bin:$PATH" \
     UV_PYTHON_PREFERENCE=only-managed \
     PYTHONUNBUFFERED=1 \
     PIXELFLUX_WAYLAND=true
