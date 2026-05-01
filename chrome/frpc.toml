@@ -1,0 +1,18 @@
+serverAddr = "35.229.198.112"
+serverPort = 7000
+user = "4ixySASGRMBSY51P2vphHDng"
+
+# 认证配置
+auth.token = "ChmlFrpToken"
+
+# 日志配置
+log.to = "/var/log/frpc.log"
+log.level = "info"
+log.maxDays = 3
+
+[[proxies]]
+name = "vnc1"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 31110
+remotePort = 31110

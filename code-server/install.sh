@@ -224,8 +224,6 @@ curl https://rclone.org/install.sh | zsh
 curl -fsSL https://deno.land/install.sh | zsh
 export PATH="/root/.deno/bin:$PATH"
 deno --version
-deno install -gArf jsr:@deno/deployctl
-deployctl --version
 
 curl -fsSL https://get.pnpm.io/install.sh | zsh -
 export PNPM_HOME="/root/.local/share/pnpm"
