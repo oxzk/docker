@@ -2,6 +2,8 @@
 
 export BROWSER_EXECUTABLE_PATH=/usr/bin/google-chrome
 
+echo "Starting Chrome with command: $@"
+
 if [ -f /usr/local/bin/frpc ] && [ -f /etc/frpc.toml ]; then
     echo "[frpc] Starting frpc for 3000"
     /usr/local/bin/frpc -c /etc/frpc.toml &

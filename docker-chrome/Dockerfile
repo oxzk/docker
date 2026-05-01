@@ -11,13 +11,14 @@ LABEL maintainer="thelamer"
 
 # title
 ENV TITLE=Chrome \
-    PATH="$HOME/.local/bin:$PATH" \
+    PATH="$HOME/.local/bin:/app/venv/bin:$PATH" \
     UV_PYTHON_PREFERENCE=only-managed \
     PYTHONUNBUFFERED=1 \
     PIXELFLUX_WAYLAND=true
 
 RUN \
   echo "**** add icon ****" && \
+  mkdir -p /app/user_data && \
   curl -o \
     /usr/share/selkies/www/icon.png \
     https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/chrome-logo.png && \
@@ -36,12 +37,13 @@ RUN \
     google-chrome-stable=${CHROME_VERSION} && \
   curl -LsSf https://astral.sh/uv/install.sh | sh && \
   uv python install 3.11 && \
+  uv venv /app/venv && \
+  uv pip install --no-cache-dir DrissionPage playwright websockify curl_cffi ddddocr pillow opencv-python-headless && \
   wget -q https://github.com/fatedier/frp/releases/download/v0.68.0/frp_0.68.0_linux_amd64.tar.gz -O /tmp/frp.tar.gz && \
   tar -xzf /tmp/frp.tar.gz -C /tmp/ && \
   mv /tmp/frp_*/frpc /usr/local/bin/frpc && \
   echo "**** cleanup ****" && \
   apt-get autoclean && \
-  mkdir -p /app/user_data && \
   rm -rf \
     /config/.cache \
     /var/lib/apt/lists/* \
