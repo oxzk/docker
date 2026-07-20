@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     set -eux; \
     uv venv "${PYTHON_VENV}"; \
     . "${PYTHON_VENV}/bin/activate"; \
-    uv pip install \
+    uv pip install -U \
         "camoufox[geoip]" \
         websockify; \
     python -m camoufox fetch;
