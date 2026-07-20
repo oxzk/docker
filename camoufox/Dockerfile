@@ -46,7 +46,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install \
         "camoufox[geoip]" \
         websockify; \
-    python -m camoufox fetch; \
+    python -m camoufox fetch;
     # python -m playwright install-deps firefox; 
     
 # 安装 noVNC 与 cloudflared。
