@@ -83,7 +83,7 @@ wait_for_cloudflared_url() {
 }
 
 prepare_authentication() {
-    local auth_mode="${CODING_TOOLS_MCP_AUTH_MODE:-bearer}"
+    local auth_mode="${CODING_TOOLS_MCP_AUTH_MODE:-oauth}"
 
     export CODING_TOOLS_MCP_AUTH_MODE="${auth_mode}"
 
@@ -127,13 +127,15 @@ start_mcp_http() {
     log "启动 HTTP MCP：${MCP_HOST}:${MCP_PORT}"
     log "workspace：${MCP_WORKSPACE}"
 
+    # 服务日志实时输出到容器日志，同时通过 tee 保留到文件以便失败时查看。
+    # 使用进程替换而非管道，确保 MCP_PID 仍是服务进程本身。
     coding-tools-mcp \
         --workspace "${MCP_WORKSPACE}" \
         --host "${MCP_HOST}" \
         --port "${MCP_PORT}" \
         --permission-mode "${CODING_TOOLS_MCP_PERMISSION_MODE}" \
         "${AUTH_ARGS[@]}" \
-        >"${MCP_LOG}" 2>&1 &
+        > >(tee "${MCP_LOG}") 2>&1 &
     MCP_PID="$!"
 
     if ! wait_for_port "127.0.0.1" "${MCP_PORT}" 30; then
