@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 MCP_PID=""
 CLOUDFLARED_PID=""
-AUTH_TOKEN_ARGS=()
+AUTH_ARGS=()
 MCP_LOG=/tmp/coding-tools-mcp.log
 CLOUDFLARED_LOG=/tmp/cloudflared.log
 
@@ -83,7 +83,7 @@ wait_for_cloudflared_url() {
 }
 
 prepare_authentication() {
-    local auth_mode="${CODING_TOOLS_MCP_AUTH_MODE:-bearer}"
+    local auth_mode="${CODING_TOOLS_MCP_AUTH_MODE:-oauth}"
 
     export CODING_TOOLS_MCP_AUTH_MODE="${auth_mode}"
 
@@ -94,9 +94,19 @@ prepare_authentication() {
                 export CODING_TOOLS_MCP_AUTH_TOKEN
                 log "未设置 CODING_TOOLS_MCP_AUTH_TOKEN，已自动生成 MCP bearer token：${CODING_TOOLS_MCP_AUTH_TOKEN}"
             fi
-            AUTH_TOKEN_ARGS=(--auth-token "${CODING_TOOLS_MCP_AUTH_TOKEN}")
+            AUTH_ARGS=(--auth-token "${CODING_TOOLS_MCP_AUTH_TOKEN}")
             ;;
-        oauth|noauth)
+        oauth)
+            if [[ -z "${CODING_TOOLS_MCP_OAUTH_PASSWORD:-}" ]]; then
+                CODING_TOOLS_MCP_OAUTH_PASSWORD="$(openssl rand -hex 32)"
+                export CODING_TOOLS_MCP_OAUTH_PASSWORD
+                log "未设置 CODING_TOOLS_MCP_OAUTH_PASSWORD，已自动生成 OAuth 授权页密码：${CODING_TOOLS_MCP_OAUTH_PASSWORD}"
+            fi
+            log "OAuth 2.1 Authorization Code + PKCE 已启用；MCP 客户端访问 HTTPS /mcp 地址后自动发现并注册，授权时输入上面的密码"
+            AUTH_ARGS=(--oauth-mode)
+            ;;
+        noauth)
+            log "警告：noauth 模式未启用认证，仅适合回环地址或受信任的内网环境"
             ;;
         *)
             log "错误：CODING_TOOLS_MCP_AUTH_MODE 必须是 bearer、oauth 或 noauth，当前为：${auth_mode}" >&2
@@ -114,7 +124,7 @@ start_mcp_http() {
         --host "${MCP_HOST}" \
         --port "${MCP_PORT}" \
         --permission-mode "${CODING_TOOLS_MCP_PERMISSION_MODE}" \
-        "${AUTH_TOKEN_ARGS[@]}" \
+        "${AUTH_ARGS[@]}" \
         >"${MCP_LOG}" 2>&1 &
     MCP_PID="$!"
 
