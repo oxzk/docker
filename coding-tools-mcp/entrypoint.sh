@@ -83,7 +83,7 @@ wait_for_cloudflared_url() {
 }
 
 prepare_authentication() {
-    local auth_mode="${CODING_TOOLS_MCP_AUTH_MODE:-oauth}"
+    local auth_mode="${CODING_TOOLS_MCP_AUTH_MODE:-bearer}"
 
     export CODING_TOOLS_MCP_AUTH_MODE="${auth_mode}"
 
@@ -101,6 +101,14 @@ prepare_authentication() {
                 CODING_TOOLS_MCP_OAUTH_PASSWORD="$(openssl rand -hex 32)"
                 export CODING_TOOLS_MCP_OAUTH_PASSWORD
                 log "未设置 CODING_TOOLS_MCP_OAUTH_PASSWORD，已自动生成 OAuth 授权页密码：${CODING_TOOLS_MCP_OAUTH_PASSWORD}"
+            fi
+            if [[ -n "${CODING_TOOLS_MCP_OAUTH_CLIENT_ID:-}" ]]; then
+                log "预注册 OAuth 客户端：${CODING_TOOLS_MCP_OAUTH_CLIENT_ID}（固定 client_id，重启后仍有效）"
+                if [[ -n "${CODING_TOOLS_MCP_OAUTH_REDIRECT_URIS:-}" ]]; then
+                    log "预注册客户端回调地址：${CODING_TOOLS_MCP_OAUTH_REDIRECT_URIS}"
+                else
+                    log "提示：未设置 CODING_TOOLS_MCP_OAUTH_REDIRECT_URIS，上游使用回环地址回退；生产客户端请显式设置回调地址"
+                fi
             fi
             log "OAuth 2.1 Authorization Code + PKCE 已启用；MCP 客户端访问 HTTPS /mcp 地址后自动发现并注册，授权时输入上面的密码"
             AUTH_ARGS=(--oauth-mode)

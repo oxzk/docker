@@ -154,33 +154,33 @@ docker run --rm -it \
 
 HTTP 模式会默认启动 cloudflared；quick tunnel 的 `https://*.trycloudflare.com` 访问地址会从 cloudflared 日志中解析并输出到容器日志。由于 quick tunnel 会公开服务，生产环境建议使用 Cloudflare named tunnel token。
 
-HTTP 模式默认使用 OAuth 认证（OAuth 2.1 Authorization Code + PKCE，含 RFC 7591 动态客户端注册），与上游默认保持一致。入口脚本在 `CODING_TOOLS_MCP_OAUTH_PASSWORD` 为空时自动生成 OAuth 授权页密码并输出到容器日志；支持 OAuth 发现的 MCP 客户端（如 Claude Desktop、ChatGPT/Grok 自定义连接器）访问 cloudflared 输出的 HTTPS `/mcp` 地址后会自动完成发现、注册与授权，授权时输入日志中的密码即可。生产环境建议显式设置 `CODING_TOOLS_MCP_OAUTH_PASSWORD`，固定域名时还可设置 `CODING_TOOLS_MCP_SERVER_URL` 固定 OAuth issuer。
+HTTP 模式默认使用 bearer 认证，与上游 `scripts/install.sh --tunnel cloudflared` 一键隧道的行为一致（tunnel 动作默认 `bearer`）。若 `CODING_TOOLS_MCP_AUTH_TOKEN` 为空，入口脚本会在启动时自动生成并输出到容器日志，远程 MCP 客户端携带 `Authorization: Bearer <token>` 访问 cloudflared 输出的 HTTPS `/mcp` 地址即可。生产环境建议显式设置并定期轮换 `CODING_TOOLS_MCP_AUTH_TOKEN`。
 
-如需改用静态 bearer 认证，设置 `CODING_TOOLS_MCP_AUTH_MODE=bearer`：此时若 `CODING_TOOLS_MCP_AUTH_TOKEN` 为空会在启动时自动生成并输出到容器日志，远程 MCP 客户端携带 `Authorization: Bearer <token>` 访问 HTTPS `/mcp` 地址。生产环境建议显式设置并定期轮换 `CODING_TOOLS_MCP_AUTH_TOKEN`。
+如需改用 OAuth（OAuth 2.1 Authorization Code + PKCE，含 RFC 7591 动态客户端注册），设置 `CODING_TOOLS_MCP_AUTH_MODE=oauth`：入口脚本在 `CODING_TOOLS_MCP_OAUTH_PASSWORD` 为空时自动生成授权页密码并输出到容器日志，支持 OAuth 发现的 MCP 客户端访问 HTTPS `/mcp` 地址后会自动完成注册与授权。镜像内置预注册客户端（`CODING_TOOLS_MCP_OAUTH_CLIENT_ID=oxzk-coding-tools-mcp`，`CODING_TOOLS_MCP_OAUTH_CLIENT_SECRET` 为固定默认值，回调默认 `http://127.0.0.1/callback,http://localhost/callback`），client_id 跨容器重启保持稳定，避免动态注册随进程重启失效导致的 `Unknown client_id`。内置 secret 为公开默认值，生产环境务必用 `-e` 覆盖；回调地址需与 MCP 客户端的实际回调完全一致（本地桌面客户端一般用回环地址，云端连接器按其要求填写），不匹配时按客户端实际值覆盖 `CODING_TOOLS_MCP_OAUTH_REDIRECT_URIS`。固定域名时还可设置 `CODING_TOOLS_MCP_SERVER_URL` 固定 OAuth issuer。
 
-使用 cloudflared token tunnel（默认仍为 OAuth 认证）:
-
-```bash
-docker run --rm -it \
-    -p 8765:8765 \
-    -v "$PWD:/workspace" \
-    -e CLOUDFLARED_TUNNEL_TOKEN='your-cloudflare-tunnel-token' \
-    oxzk/coding-tools-mcp
-```
-
-如需固定 OAuth 授权页密码或公开域名，可额外设置 `CODING_TOOLS_MCP_OAUTH_PASSWORD` 与 `CODING_TOOLS_MCP_SERVER_URL`。如需改用静态 bearer 认证：
+使用 cloudflared token tunnel（默认仍为 bearer 认证）:
 
 ```bash
 docker run --rm -it \
     -p 8765:8765 \
     -v "$PWD:/workspace" \
     -e CLOUDFLARED_TUNNEL_TOKEN='your-cloudflare-tunnel-token' \
-    -e CODING_TOOLS_MCP_AUTH_MODE=bearer \
     -e CODING_TOOLS_MCP_AUTH_TOKEN='your-mcp-bearer-token' \
     oxzk/coding-tools-mcp
 ```
 
-`CLOUDFLARED_TUNNEL_TOKEN` 只用于 cloudflared named tunnel 连接认证；MCP 侧的认证由 `CODING_TOOLS_MCP_AUTH_MODE` 决定（默认 `oauth`，bearer 模式使用 `CODING_TOOLS_MCP_AUTH_TOKEN`），两者职责不同。入口脚本不会主动输出 cloudflared token。未设置 tunnel token 时，HTTP 模式会自动使用 quick tunnel，并将 `trycloudflare.com` 访问地址输出到容器日志。
+如需改用 OAuth：
+
+```bash
+docker run --rm -it \
+    -p 8765:8765 \
+    -v "$PWD:/workspace" \
+    -e CLOUDFLARED_TUNNEL_TOKEN='your-cloudflare-tunnel-token' \
+    -e CODING_TOOLS_MCP_AUTH_MODE=oauth \
+    oxzk/coding-tools-mcp
+```
+
+`CLOUDFLARED_TUNNEL_TOKEN` 只用于 cloudflared named tunnel 连接认证；MCP 侧的认证由 `CODING_TOOLS_MCP_AUTH_MODE` 决定（默认 `bearer`，使用 `CODING_TOOLS_MCP_AUTH_TOKEN`），两者职责不同。入口脚本不会主动输出 cloudflared token。未设置 tunnel token 时，HTTP 模式会自动使用 quick tunnel，并将 `trycloudflare.com` 访问地址输出到容器日志。
 
 环境变量:
 
@@ -191,9 +191,12 @@ docker run --rm -it \
 | `MCP_PORT` | `8765` | MCP HTTP 监听端口 |
 | `MCP_WORKSPACE` | `/workspace` | MCP 工作区路径 |
 | `CODING_TOOLS_MCP_PERMISSION_MODE` | `trusted` | 上游权限模式；不建议远程使用 `dangerous` |
-| `CODING_TOOLS_MCP_AUTH_MODE` | `oauth` | `bearer`、`oauth` 或 `noauth`；`oauth` 模式为空密码时自动生成授权页密码 |
+| `CODING_TOOLS_MCP_AUTH_MODE` | `bearer` | `bearer`、`oauth` 或 `noauth`；`bearer` 模式为空 token 时自动生成，`oauth` 模式为空密码时自动生成授权页密码 |
 | `CODING_TOOLS_MCP_OAUTH_PASSWORD` | 自动生成 | OAuth 授权页密码；仅 `oauth` 模式使用，设置后不自动生成 |
 | `CODING_TOOLS_MCP_SERVER_URL` | 空 | 固定的公开 origin（不含 `/mcp`），用于固定 OAuth issuer；quick tunnel 时留空由服务端从请求推断 |
+| `CODING_TOOLS_MCP_OAUTH_CLIENT_ID` | `oxzk-coding-tools-mcp` | 预注册 OAuth 客户端 ID；固定值跨重启有效，可用 `-e` 覆盖 |
+| `CODING_TOOLS_MCP_OAUTH_CLIENT_SECRET` | 内置固定值 | 预注册客户端密钥；为公开默认值，生产环境必须用 `-e` 覆盖 |
+| `CODING_TOOLS_MCP_OAUTH_REDIRECT_URIS` | `http://127.0.0.1/callback,http://localhost/callback` | 预注册客户端的回调地址（逗号分隔，需与客户端实际回调完全一致）；本地桌面客户端一般用回环地址，云端连接器按其要求覆盖 |
 | `CODING_TOOLS_MCP_AUTH_TOKEN` | 自动生成 | MCP bearer token；仅在 `bearer` 模式使用，设置后通过上游 `--auth-token` 参数传入 |
 | `CLOUDFLARED_TUNNEL_TOKEN` | 空 | Cloudflare named tunnel token；设置后优先使用 token tunnel |
 | `CLOUDFLARED_TUNNEL_URL` | `http://127.0.0.1:8765` | quick tunnel 的本地转发地址 |
