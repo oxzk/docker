@@ -132,3 +132,62 @@ docker run --rm -it \
 ```
 
 建议始终设置 `VNC_PASSWORD`。未设置时入口脚本会保留无密码 VNC 以兼容本地开发, 并输出警告。
+
+## coding-tools-mcp
+
+基于上游 [coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp) 构建，提供 Python 3.11 MCP 服务与 cloudflared。镜像默认启动 Streamable HTTP，MCP 端点为 `/mcp`，工作区为 `/workspace`。
+
+构建:
+
+```bash
+docker build -t oxzk/coding-tools-mcp ./coding-tools-mcp
+```
+
+启动 HTTP MCP 与 cloudflared quick tunnel:
+
+```bash
+docker run --rm -it \
+    -p 8765:8765 \
+    -v "$PWD:/workspace" \
+    oxzk/coding-tools-mcp
+```
+
+HTTP 模式会默认启动 cloudflared；quick tunnel 的 `https://*.trycloudflare.com` 访问地址会从 cloudflared 日志中解析并输出到容器日志。由于 quick tunnel 会公开服务，生产环境建议使用 Cloudflare named tunnel token。
+
+HTTP 模式默认使用 bearer 认证。入口脚本参考上游 CLI 的 `--auth-token` 参数：如果 `CODING_TOOLS_MCP_AUTH_TOKEN` 为空，会在启动时使用 `openssl rand -hex 32` 自动生成 token，通过 `--auth-token` 传给 MCP，并将一次性 token 输出到容器日志；远程 MCP 客户端应访问 cloudflared 输出的 HTTPS `/mcp` 地址，并携带 `Authorization: Bearer <token>`。生产环境建议显式设置并定期轮换 `CODING_TOOLS_MCP_AUTH_TOKEN`。
+
+使用 cloudflared token tunnel:
+
+```bash
+docker run --rm -it \
+    -p 8765:8765 \
+    -v "$PWD:/workspace" \
+    -e CLOUDFLARED_TUNNEL_TOKEN='your-cloudflare-tunnel-token' \
+    -e CODING_TOOLS_MCP_AUTH_TOKEN='your-mcp-bearer-token' \
+    oxzk/coding-tools-mcp
+```
+
+`CLOUDFLARED_TUNNEL_TOKEN` 只用于 cloudflared named tunnel 连接认证；`CODING_TOOLS_MCP_AUTH_TOKEN` 用于 MCP HTTP bearer 认证，两者职责不同。入口脚本不会主动输出 cloudflared token。未设置 tunnel token 时，HTTP 模式会自动使用 quick tunnel，并将 `trycloudflare.com` 访问地址输出到容器日志。
+
+环境变量:
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MCP_MODE` | `http` | `http` 或 `stdio`；stdio 模式不启动 cloudflared |
+| `MCP_HOST` | `0.0.0.0` | MCP HTTP 监听地址 |
+| `MCP_PORT` | `8765` | MCP HTTP 监听端口 |
+| `MCP_WORKSPACE` | `/workspace` | MCP 工作区路径 |
+| `CODING_TOOLS_MCP_PERMISSION_MODE` | `trusted` | 上游权限模式；不建议远程使用 `dangerous` |
+| `CODING_TOOLS_MCP_AUTH_MODE` | `bearer` | `bearer`、`oauth` 或 `noauth`；`bearer` 模式为空 token 时自动生成 |
+| `CODING_TOOLS_MCP_AUTH_TOKEN` | 自动生成 | MCP bearer token；设置后通过上游 `--auth-token` 参数传入 |
+| `CLOUDFLARED_TUNNEL_TOKEN` | 空 | Cloudflare named tunnel token；设置后优先使用 token tunnel |
+| `CLOUDFLARED_TUNNEL_URL` | `http://127.0.0.1:8765` | quick tunnel 的本地转发地址 |
+
+stdio 模式示例:
+
+```bash
+docker run --rm -i \
+    -e MCP_MODE=stdio \
+    -v "$PWD:/workspace" \
+    oxzk/coding-tools-mcp
+```
