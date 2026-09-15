@@ -1,0 +1,9 @@
+# 文件编码：UTF-8 无 BOM
+.git
+.github
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
