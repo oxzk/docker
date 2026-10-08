@@ -1,6 +1,6 @@
 services:
   desktop:
-    build: .
+    container_name: desktop
     image: oxzk/desktop:latest
     hostname: vm
     shm_size: 2gb

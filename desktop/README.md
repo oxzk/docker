@@ -15,7 +15,8 @@ PASSWORD=replace-with-your-password
 执行:
 
 ```bash
-docker compose up -d --build
+docker compose pull desktop
+docker compose up -d
 docker compose logs -f desktop
 ```
 
@@ -42,7 +43,7 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 
 保持入口脚本以 root 启动, 由脚本将挂载目录本身的所有者设置为 `admin` (UID/GID 1000), 权限设置为 `0700`, 再以 `admin` 运行桌面. 确保挂载可读写且宿主机文件系统允许修改所有者和权限. 迁入已有文件时, 确保这些文件也允许 UID/GID 1000 访问; 启动脚本不会递归修改桌面数据的权限.
 
-更新入口脚本后, 执行 `docker compose up -d --build desktop` 重建镜像并重新创建容器.
+更新入口脚本后, 先构建并发布新版镜像, 再执行 `docker compose pull desktop` 和 `docker compose up -d desktop` 拉取镜像并重新创建容器.
 
 ## 配置
 
@@ -57,3 +58,15 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 使用构建参数 `KASMVNC_VERSION` 和 `CLOUDFLARED_VERSION` 指定组件版本. 支持 `linux/amd64` 和 `linux/arm64` 对应的官方软件包.
 
 关键服务退出时容器返回非零状态, 由重启策略重新启动. 使用 `docker compose down` 停止服务, 保留宿主机数据目录.
+
+## 启动排查
+
+等待日志出现 `GNOME desktop ready` 后再连接桌面. 启动脚本会等待最多约 90 秒, 同时确认 `gnome-shell` 进程和 KasmVNC HTTP 响应, 然后启动 Cloudflared.
+
+遇到反复重启时, 检查容器日志中的服务名称, 退出状态和最近 120 行桌面会话日志. 需要更多上下文时, 在 `compose.yml` 所在目录读取挂载文件:
+
+```bash
+tail -n 200 ./data/desktop/.vnc/*:1.log
+```
+
+保持 GNOME 的 `gnome` 会话与 Shell 的 `user` 模式配套. 使用 `dbus-run-session -- gnome-session --session=gnome` 启动会话, 不添加 Ubuntu 24.04 的 GNOME 46 不支持的 `--builtin` 参数. 参考 `../remote-desktop` 时, 仅在具备 systemd 用户会话的环境使用其 `loginctl` 和 `systemctl --user` 配置.

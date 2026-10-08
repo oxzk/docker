@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# 在独立用户总线上启动 GNOME, 使用内置会话管理器避免依赖 systemd --user.
+# 在独立用户总线上启动 GNOME X11 会话.
 set -euo pipefail
 unset SESSION_MANAGER DBUS_SESSION_BUS_ADDRESS WAYLAND_DISPLAY
+# 将 Shell 模式与选定的 GNOME 会话配套, 统一使用 X11 和软件渲染.
+export XDG_SESSION_TYPE=x11
+export XDG_SESSION_DESKTOP=gnome
+export XDG_CURRENT_DESKTOP=GNOME
+export GNOME_SHELL_SESSION_MODE=user
+export GDK_BACKEND=x11 CLUTTER_BACKEND=x11
+export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe GSK_RENDERER=cairo
 exec dbus-run-session -- bash -euc '
   gsettings set org.gnome.desktop.interface font-name "Noto Sans CJK SC 11"
   gsettings set org.gnome.desktop.interface document-font-name "Noto Sans CJK SC 11"
@@ -9,5 +16,5 @@ exec dbus-run-session -- bash -euc '
   gsettings set org.gnome.desktop.interface enable-animations false
   gsettings set org.gnome.desktop.session idle-delay 0
   gsettings set org.gnome.desktop.screensaver lock-enabled false
-  exec gnome-session --builtin --session=gnome
+  exec gnome-session --session=gnome
 '

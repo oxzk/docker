@@ -15,7 +15,7 @@ RUN set -eux; \
         fonts-noto-cjk fonts-noto-color-emoji fonts-noto-mono \
         gnome-session gnome-shell gnome-settings-daemon gnome-terminal \
         gnome-control-center nautilus adwaita-icon-theme \
-        libgl1-mesa-dri libegl1 libgl1 locales procps ssl-cert sudo \
+        libgl1-mesa-dri libegl1 libgl1 libglib2.0-bin locales procps ssl-cert sudo \
         tini util-linux x11-xserver-utils xauth xdg-user-dirs; \
     locale-gen zh_CN.UTF-8 en_US.UTF-8; \
     arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
@@ -58,11 +58,12 @@ ENV LANG=zh_CN.UTF-8 \
     XDG_SESSION_TYPE=x11 \
     XDG_SESSION_DESKTOP=gnome \
     XDG_CURRENT_DESKTOP=GNOME \
-    GNOME_SHELL_SESSION_MODE=gnome \
+    GNOME_SHELL_SESSION_MODE=user \
     GDK_BACKEND=x11 \
     CLUTTER_BACKEND=x11 \
     LIBGL_ALWAYS_SOFTWARE=1 \
     GALLIUM_DRIVER=llvmpipe \
+    GSK_RENDERER=cairo \
     KASMVNC_WEBSOCKET_PORT=8444 \
     DESKTOP_WIDTH=1920 \
     DESKTOP_HEIGHT=1080
