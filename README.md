@@ -81,6 +81,25 @@ Host local-code-server
 
 SSH 密码与 code-server Web 登录密码共用 `PASSWORD`.
 
+通过 uv 直接安装 Python, 不创建或自动激活虚拟环境. Python, uv, Go, Rust, Node.js, pnpm, Deno, Codex 和 Wrangler 的路径由镜像统一配置, 可直接用于终端和编辑器任务. 挂载 `/workspace` 不会覆盖 Python 安装.
+
+在 Git 仓库中执行 `ginit [临时名称]`, 默认临时名称为 `new-branch`. 命令使用独立索引从当前工作区创建单个 `init` 根提交, 读取 `origin` 推送地址上 main 的 SHA, 再使用显式 `--force-with-lease` 推送. 推送成功后更新本地 main 和索引; 推送失败时保留原本地分支, 原索引及工作区文件. 临时引用位于 `refs/ginit/`, 退出时自动清理. 仅在手动执行时重写分支历史, 不运行提交钩子.
+
+镜像仅安装 Docker CLI, Buildx 和 Compose, 不安装或启动 Docker Engine. 连接宿主机 Docker 时运行:
+
+```bash
+docker run --rm -it \
+    -p 9091:9091 -p 2222:22 \
+    -e PASSWORD=code001 \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "$PWD":/workspace \
+    oxzk/code-server
+```
+
+工具版本和插件提交集中在 `code-server/Dockerfile` 的 `ARG` 中, 可用 `--build-arg NAME=VALUE` 显式更新. 系统 APT 包和未指定版本的编辑器扩展仍在构建时解析. Shell 插件使用固定提交源码, 已关闭 Oh My Zsh 自动更新.
+
+编辑 `code-server/config/` 下的终端, Vim, Git 和编辑器配置, 或修改独立的 `ginit` 脚本, 不会使工具安装层失效. 编辑 `code-server/extensions.txt` 管理扩展; 每行支持 `publisher.name@version`. APT 软件索引和下载包使用 BuildKit 缓存, 安装脚本只清理自身下载缓存.
+
 ## camoufox
 
 构建:

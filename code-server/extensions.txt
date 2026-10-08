@@ -1,0 +1,11 @@
+# 每行指定一个扩展, 可用 publisher.name@version 固定扩展版本.
+tamasfe.even-better-toml
+esbenp.prettier-vscode
+denoland.vscode-deno
+dracula-theme.theme-dracula
+ms-python.python
+ms-python.black-formatter
+foxundermoon.shell-format
+pkief.material-icon-theme
+redhat.vscode-yaml
+golang.go

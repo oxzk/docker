@@ -1,0 +1,8 @@
+syntax on
+set encoding=utf-8
+set termguicolors
+set background=dark
+set smartindent
+set wrap
+set ruler
+colorscheme dracula
