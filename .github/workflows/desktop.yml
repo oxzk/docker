@@ -1,18 +1,25 @@
-name: obscura
+name: desktop
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'obscura/**'
-  #     - 'debian/**'
-  #     - '**/obscura.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'desktop/**'
+      - '**/desktop.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: desktop-build
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -30,20 +37,20 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
-        id: docker_build
         uses: docker/build-push-action@v7
         with:
-          context: ./obscura
+          context: ./desktop
+          file: ./desktop/Dockerfile
           push: true
-          file: ./obscura/Dockerfile
           platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=obscura
-          cache-to: type=gha,mode=max,scope=obscura
+          cache-from: type=gha,scope=desktop
+          cache-to: type=gha,mode=max,scope=desktop
           tags: |
-            oxzk/obscura:latest
+            oxzk/desktop:latest
+            oxzk/desktop:ubuntu24
 
       - name: Delete workflow runs
-        uses: Mattraks/delete-workflow-runs@main
+        uses: Mattraks/delete-workflow-runs@v2
         with:
           retain_days: 0
           keep_minimum_runs: 2

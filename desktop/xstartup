@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# 在独立用户总线上启动 GNOME, 使用内置会话管理器避免依赖 systemd --user.
+set -euo pipefail
+unset SESSION_MANAGER DBUS_SESSION_BUS_ADDRESS WAYLAND_DISPLAY
+exec dbus-run-session -- bash -euc '
+  gsettings set org.gnome.desktop.interface font-name "Noto Sans CJK SC 11"
+  gsettings set org.gnome.desktop.interface document-font-name "Noto Sans CJK SC 11"
+  gsettings set org.gnome.desktop.interface monospace-font-name "Noto Sans Mono CJK SC 12"
+  gsettings set org.gnome.desktop.interface enable-animations false
+  gsettings set org.gnome.desktop.session idle-delay 0
+  gsettings set org.gnome.desktop.screensaver lock-enabled false
+  exec gnome-session --builtin --session=gnome
+'

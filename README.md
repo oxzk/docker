@@ -210,53 +210,69 @@ docker run --rm -i \
     oxzk/coding-tools-mcp
 ```
 
-## obscura
+## webtop
 
-基于官网镜像 [h4ckf0r0day/obscura](https://hub.docker.com/r/h4ckf0r0day/obscura) 的 `latest` 二进制构建, 并安装 Noto CJK 中文字体. 入口脚本默认启动 `serve`, 并注入 `--host 0.0.0.0` 与 `--stealth`.
+基于 [LinuxServer.io docker-webtop](https://github.com/linuxserver/docker-webtop) 的 Selkies 基座构建浏览器内 GNOME 桌面, 并安装 Google Chrome. 官方 Webtop 没有 GNOME 变体; 本镜像按 ubuntu-xfce 的目录布局自行安装 GNOME 46 与 Chrome, 桌面会话、HTTPS、GPU 仍由 `baseimage-selkies` 处理.
 
 构建:
 
 ```bash
-docker build -t oxzk/obscura ./obscura
+docker build -t oxzk/webtop ./webtop
 ```
 
-本地运行 CDP:
+默认基座为 `ghcr.io/linuxserver/baseimage-selkies:ubuntunoble` (Ubuntu 24.04, GNOME 46 仍支持 `gnome-shell --x11`). 可覆盖:
 
 ```bash
-docker run --rm -it \
-    -p 127.0.0.1:9222:9222 \
-    oxzk/obscura
+docker build \
+    --build-arg SELKIES_IMAGE=ghcr.io/linuxserver/baseimage-selkies:ubuntunoble \
+    -t oxzk/webtop \
+    ./webtop
 ```
 
-访问:
+目录结构:
 
 ```text
-http://127.0.0.1:9222/json/version
+webtop/
+  Dockerfile
+  root/
+    defaults/startwm.sh            # X11 启动 GNOME Shell
+    defaults/startwm_wayland.sh    # PIXELFLUX_WAYLAND=true 时嵌套启动
+    usr/local/bin/wrapped-chrome   # 非 privileged 容器关闭 sandbox
+    usr/share/glib-2.0/schemas/    # 关闭锁屏并固定收藏夹
 ```
 
-建议始终把端口发布到宿主机回环地址. CDP 控制面没有认证, `-p 9222:9222` 会把端口暴露到所有网卡.
-
-使用持久化存储:
+本地运行:
 
 ```bash
 docker run --rm -it \
-    -p 127.0.0.1:9222:9222 \
-    -v "$PWD/obscura-data:/data" \
-    oxzk/obscura \
-    serve --storage-dir /data
+    --shm-size=1gb \
+    -p 3000:3000 \
+    -p 3001:3001 \
+    -e TZ=Asia/Shanghai \
+    -v "$PWD/webtop-config:/config" \
+    oxzk/webtop
 ```
 
-一次性抓取:
+浏览器访问 `https://127.0.0.1:3001/` (自签证书需放行). HTTP `3000` 仅供反代. 需要 GPU 时按上游方式挂载 `/dev/dri`.
+
+认证与中文界面:
 
 ```bash
-docker run --rm \
-    oxzk/obscura \
-    fetch https://example.com --eval "document.title"
+docker run --rm -it \
+    --shm-size=1gb \
+    -p 3001:3001 \
+    -e CUSTOM_USER=abc \
+    -e PASSWORD=change-me \
+    -e LC_ALL=zh_CN.UTF-8 \
+    -v "$PWD/webtop-config:/config" \
+    oxzk/webtop
 ```
 
-环境变量:
+`amd64` 安装 `google-chrome-stable`; `arm64` 无官方 Chrome, 改装 xtradeb Chromium, 桌面入口仍为 Google Chrome.
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `OBSCURA_HOST` | `0.0.0.0` | `serve` 未显式传 `--host` 时注入的绑定地址 |
-| `OBSCURA_PORT` | `9222` | 无参数启动时的 CDP 端口 |
+| 端口 | 说明 |
+| --- | --- |
+| `3000` | Web Desktop HTTP, 需反代 |
+| `3001` | Web Desktop HTTPS |
+
+`/config` 为 `abc` 用户家目录, 桌面与 Chrome 配置写在这里.
