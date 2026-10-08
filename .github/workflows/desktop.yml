@@ -45,9 +45,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha,scope=desktop
           cache-to: type=gha,mode=max,scope=desktop
-          tags: |
-            oxzk/desktop:latest
-            oxzk/desktop:ubuntu24
+          tags: oxzk/desktop:latest
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@v2

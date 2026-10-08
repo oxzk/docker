@@ -1,18 +1,14 @@
 services:
   desktop:
     build: .
-    image: oxzk/desktop:ubuntu24
+    image: oxzk/desktop:latest
     hostname: vm
     shm_size: 2gb
     ports:
       - "127.0.0.1:8444:8444"
-    environment:
-      PASSWORD: ${PASSWORD:?Set PASSWORD in .env}
-      CLOUDFLARED_TOKEN: ${CLOUDFLARED_TOKEN:-}
+    env_file:
+      - .env
     volumes:
-      - desktop-home:/home/admin
+      - ./data/desktop:/home/admin
     restart: unless-stopped
     stop_grace_period: 15s
-
-volumes:
-  desktop-home:

@@ -40,6 +40,8 @@ start_service() {
     PIDS+=("$!")
 }
 
+# 绑定挂载会覆盖镜像内的主目录权限, 先确保 admin 能创建密码临时文件.
+install -d -m 700 -o admin -g admin /home/admin
 install -d -m 755 /run/dbus
 install -d -m 700 -o admin -g admin "$XDG_RUNTIME_DIR" /home/admin/.vnc
 install -d -m 1777 /tmp/.X11-unix
@@ -75,8 +77,12 @@ install -o admin -g admin -m 755 /opt/desktop/xstartup /home/admin/.vnc/xstartup
 touch /home/admin/.vnc/.de-was-selected
 chown admin:admin /home/admin/.vnc/kasmvnc.yaml /home/admin/.vnc/.de-was-selected
 chmod 600 /home/admin/.vnc/kasmvnc.yaml
-printf '%s\n%s\n' "$PASSWORD" "$PASSWORD" \
-    | runuser -u admin -- vncpasswd -u admin -ow /home/admin/.kasmpasswd
+if ! printf '%s\n%s\n' "$PASSWORD" "$PASSWORD" \
+    | runuser -u admin -- vncpasswd -u admin -ow /home/admin/.kasmpasswd \
+    || [[ ! -s /home/admin/.kasmpasswd ]]; then
+    printf 'Failed to create KasmVNC password file: /home/admin/.kasmpasswd\n' >&2
+    exit 1
+fi
 chown admin:admin /home/admin/.kasmpasswd
 chmod 600 /home/admin/.kasmpasswd
 unset PASSWORD
