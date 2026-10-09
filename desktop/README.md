@@ -1,6 +1,6 @@
 # GNOME Desktop
 
-使用 Ubuntu 24.04, GNOME X11, KasmVNC 1.5.0 和 Cloudflared. 使用非 root 用户 `admin` 运行桌面, 使用软件渲染. 不安装 SSH Server, 不要求 privileged 或宿主机 systemd.
+使用 Ubuntu 24.04, Ubuntu GNOME Shell X11, KasmVNC 1.5.0 和 Cloudflared. 使用非 root 用户 `admin` 运行桌面, 使用软件渲染. 由入口脚本分别管理 Xvnc、用户 D-Bus、GNOME Shell 和设置服务. 不安装 SSH Server, 不要求 tmpfs、privileged 或宿主机 systemd.
 
 ## 启动
 
@@ -33,7 +33,6 @@ docker compose logs -f desktop
 ```bash
 docker build -t oxzk/desktop:latest ./desktop
 docker run -d --name desktop --hostname vm --shm-size=2g \
-  --tmpfs /run:rw,nosuid,nodev,mode=755 \
   -p 127.0.0.1:8444:8444 \
   --env-file ./desktop/.env \
   -v "$(pwd)/desktop/data/desktop:/home/admin" \

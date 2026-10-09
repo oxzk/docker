@@ -4,9 +4,6 @@ services:
     image: oxzk/desktop:latest
     hostname: vm
     shm_size: 2gb
-    # 隔离镜像残留的 systemd 运行状态, 避免 GNOME 误判 logind 可用.
-    tmpfs:
-      - /run:rw,nosuid,nodev,mode=755
     ports:
       - "127.0.0.1:8444:8444"
     env_file:
