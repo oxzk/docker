@@ -102,4 +102,4 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 
 保持 Compose 的 `stop_grace_period` 大于 `SHUTDOWN_TIMEOUT` 至少 7 秒, 当前默认 30 秒. 停止时先断开 WARP, 再通知服务进程组退出并等待落盘, 仅对超时进程强制终止.
 
-查看 `/usr/local/share/image-build/versions.txt` 获取实际安装版本, 查看 OCI 标签 `org.opencontainers.image.revision` 获取源码提交. 工作流分别在 amd64 和 arm64 原生 Linux runner 上构建, 两种架构构建成功后合并发布 `latest`, 并发布唯一的 `sha-<commit>-<run_id>-<run_attempt>` 标签. 不将构建成功视为桌面或 WARP 运行验证通过.
+查看 `/usr/local/share/image-build/versions.txt` 获取实际安装版本, 查看 OCI 标签 `org.opencontainers.image.revision` 获取源码提交. 在 GitHub Actions 中手动触发工作流, 使用单个 `ubuntu-latest` runner 和 QEMU/Buildx 构建 amd64, arm64 镜像并发布 `oxzk/desktop:latest`. 工作流使用独立 GHA 缓存, 保留最近 2 次运行记录. 不将构建成功视为桌面或 WARP 运行验证通过.

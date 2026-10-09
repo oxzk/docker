@@ -114,7 +114,7 @@ docker run --rm -it \
 
 按工具组维护独立安装层. 修改后面工具层的版本时复用前面的安装层; 编辑 `code-server/config/` 或 `ginit` 不会使工具安装层失效. 编辑 `code-server/extensions.txt` 管理扩展, 每行支持 `publisher.name@version`. APT 缓存挂载在同一 BuildKit 构建器中复用; GitHub Actions 的 GHA 缓存保存构建层, 不跨临时 runner 保存 APT 缓存挂载内容.
 
-查看镜像内 `/usr/local/share/image-build/versions.txt` 获取工具参数和实际系统包版本, 查看 OCI 标签 `org.opencontainers.image.revision` 获取源码提交. 工作流在 amd64 和 arm64 原生 Linux runner 上分别构建, 两种架构构建成功后合并发布 `latest`. 使用 `sha-<commit>-<run_id>-<run_attempt>` 标签部署具体发布, 避免后续构建覆盖同一发布标签. 不将构建成功视为运行验证通过.
+查看镜像内 `/usr/local/share/image-build/versions.txt` 获取工具参数和实际系统包版本, 查看 OCI 标签 `org.opencontainers.image.revision` 获取源码提交. 在 GitHub Actions 中手动触发工作流, 使用单个 `ubuntu-latest` runner 和 QEMU/Buildx 构建 amd64, arm64 镜像并发布 `oxzk/code-server:latest`. 工作流使用独立 GHA 缓存, 保留最近 2 次运行记录. 不将构建成功视为运行验证通过.
 
 ## camoufox
 
