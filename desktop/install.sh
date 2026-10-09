@@ -3,11 +3,21 @@
 set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 arch="${TARGETARCH:-$(dpkg --print-architecture)}"
-case "$arch" in amd64|arm64) ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac
+# Fastfetch 使用 aarch64 命名 ARM64 压缩包, 其他下载源仍使用 Debian 的 arm64.
+case "$arch" in
+    amd64) fastfetch_arch=amd64 ;;
+    arm64) fastfetch_arch=aarch64 ;;
+    *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
+esac
 
-# 下载失败时重试, 让 HTTP 错误直接终止构建.
+# 下载失败时输出对应 URL 并保留 curl 退出码, 让构建错误能定位到具体软件包.
 download() {
-    curl --fail --silent --show-error --location --retry 3 "$1" -o "$2"
+    local status=0
+    curl --fail --silent --show-error --location --retry 3 "$1" -o "$2" || status=$?
+    if (( status != 0 )); then
+        printf 'Download failed (curl exit %s): %s\n' "$status" "$1" >&2
+        return "$status"
+    fi
 }
 
 # 统一解析 GitHub 的固定版本和最新版本下载地址.
@@ -38,9 +48,15 @@ printf '%s\n' \
 printf '%s\n' 'Package: *' 'Pin: origin packages.mozilla.org' 'Pin-Priority: 1000' \
     > /etc/apt/preferences.d/mozilla
 
+# 使用支持 Noble 双架构的官方 WARP 软件源, APT 可直接读取 ASCII 公钥.
+download https://pkg.cloudflareclient.com/pubkey.gpg /etc/apt/keyrings/cloudflare-warp.asc
+chmod 0644 /etc/apt/keyrings/cloudflare-warp.asc
+printf '%s\n' \
+    'deb [signed-by=/etc/apt/keyrings/cloudflare-warp.asc] https://pkg.cloudflareclient.com/ noble main' \
+    > /etc/apt/sources.list.d/cloudflare-warp.list
+
 download "$(release_url kasmtech/KasmVNC "v${KASMVNC_VERSION}" "kasmvncserver_noble_${KASMVNC_VERSION}_${arch}.deb")" /tmp/kasmvnc.deb
-download "$(release_url fastfetch-cli/fastfetch "$FASTFETCH_VERSION" "fastfetch-linux-${arch}.deb")" /tmp/fastfetch.deb
-packages=(/tmp/kasmvnc.deb /tmp/fastfetch.deb firefox firefox-l10n-zh-cn)
+packages=(/tmp/kasmvnc.deb firefox firefox-l10n-zh-cn)
 if [[ "$arch" == amd64 ]]; then
     download https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb /tmp/google-chrome.deb
     packages+=(/tmp/google-chrome.deb)
@@ -49,7 +65,7 @@ fi
 # 一次求解桌面和应用依赖, 避免分层更新相同的库和包数据库.
 apt-get update
 apt-get install -y --no-install-recommends \
-        ca-certificates curl dbus dbus-x11 fontconfig locales tini util-linux sudo \
+        ca-certificates curl dbus dbus-x11 fontconfig locales tini util-linux sudo cloudflare-warp \
         fonts-noto-cjk fonts-noto-color-emoji fonts-noto-mono \
         gnome-shell ubuntu-session gnome-settings-daemon \
         gnome-terminal nautilus \
@@ -61,6 +77,16 @@ apt-get install -y --no-install-recommends \
         language-pack-zh-hans language-pack-gnome-zh-hans \
         procps ssl-cert xauth x11-utils x11-xserver-utils xdg-user-dirs \
     "${packages[@]}"
+
+# 从官方 Linux 压缩包安装可执行文件, 仅提取运行文件和分发所需的许可证.
+download "$(release_url fastfetch-cli/fastfetch "$FASTFETCH_VERSION" "fastfetch-linux-${fastfetch_arch}.tar.gz")" /tmp/fastfetch.tar.gz
+fastfetch_root="fastfetch-linux-${fastfetch_arch}"
+tar -xzf /tmp/fastfetch.tar.gz -C /tmp \
+    "$fastfetch_root/usr/bin/fastfetch" \
+    "$fastfetch_root/usr/share/licenses/fastfetch/LICENSE"
+install -d -m 0755 /usr/local/bin /usr/share/doc/fastfetch
+install -m 0755 "/tmp/$fastfetch_root/usr/bin/fastfetch" /usr/local/bin/fastfetch
+install -m 0644 "/tmp/$fastfetch_root/usr/share/licenses/fastfetch/LICENSE" /usr/share/doc/fastfetch/copyright
 
 uv_path="${UV_VERSION}/install.sh"
 if [[ "$UV_VERSION" == latest ]]; then uv_path=install.sh; fi
@@ -84,6 +110,8 @@ fastfetch --version
 firefox --version
 if [[ "$arch" == amd64 ]]; then google-chrome --version; fi
 cloudflared --version
+warp-cli --version
+command -v warp-svc
 command -v Xvnc
 command -v vncpasswd
 

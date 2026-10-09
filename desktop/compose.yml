@@ -3,6 +3,10 @@ services:
     container_name: desktop
     image: oxzk/desktop:latest
     hostname: vm
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
     shm_size: 2gb
     ports:
       - "127.0.0.1:8444:8444"
@@ -10,4 +14,5 @@ services:
       - .env
     volumes:
       - ./data/desktop:/home/admin
+      - ./data/warp:/var/lib/cloudflare-warp
     restart: unless-stopped

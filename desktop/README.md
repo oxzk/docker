@@ -10,7 +10,7 @@
 PASSWORD=replace-with-your-password
 ```
 
-将容器环境变量统一写入与 `compose.yml` 同目录的 `.env`, 通过 `env_file` 加载. 按需添加 `CLOUDFLARED_TOKEN`, `DESKTOP_WIDTH` 等配置; 省略可选项以使用默认值. 修改 `.env` 后执行 `docker compose up -d desktop` 重新创建容器, 使配置生效.
+将容器环境变量统一写入与 `compose.yml` 同目录的 `.env`, 通过 `env_file` 加载. 按需添加 `WARP_ENABLED`, `CLOUDFLARED_TOKEN`, `DESKTOP_WIDTH` 等配置; 省略可选项以使用默认值. 修改 `.env` 后执行 `docker compose up -d desktop` 重新创建容器, 使配置生效.
 
 执行:
 
@@ -26,6 +26,22 @@ docker compose logs -f desktop
 
 需要固定域名时在 `.env` 中设置 `CLOUDFLARED_TOKEN`, 在 Cloudflare 控制台将该域名的服务配置为 `http://localhost:8444`.
 
+## WARP 客户端
+
+默认启用 Cloudflare WARP, 使用 `warp+doh` 模式处理容器的出站流量和 DNS. 保留 Compose 中的 `/dev/net/tun` 设备映射和 `NET_ADMIN` 能力, 并确保 Linux 宿主机存在该设备. 首次启用时由脚本使用 `--accept-tos` 注册客户端并连接, 将注册信息保存在 `./data/warp`.
+
+需要关闭 WARP 时, 在 `.env` 中设置:
+
+```dotenv
+WARP_ENABLED=false
+```
+
+执行 `docker compose up -d desktop` 重新创建容器. 设为 `true` 或省略该变量以启用 WARP. 关闭时不启动 `warp-svc`, 不注册或连接 WARP, 保留已安装的 `warp-cli` 和注册数据. Cloudflared Tunnel 仍按原配置启动.
+
+等待日志出现 `WARP connected`, 该提示表示实际出口检查返回 `warp=on` 或 `warp=plus`. 连接失败时让容器明确报错退出, 不自动切换为直连. 需要查看状态时在部署机器执行 `docker compose exec desktop warp-cli --accept-tos status`.
+
+Compose 中的设备映射和网络能力不会随 `WARP_ENABLED` 自动移除. 若宿主机不提供 TUN 设备, 关闭 WARP 后同时移除服务的 `devices` 和 `cap_add` 配置.
+
 ## 单独构建和运行
 
 在仓库根目录执行:
@@ -33,9 +49,11 @@ docker compose logs -f desktop
 ```bash
 docker build -t oxzk/desktop:latest ./desktop
 docker run -d --name desktop --hostname vm --shm-size=2g \
+  --cap-add NET_ADMIN --device /dev/net/tun:/dev/net/tun \
   -p 127.0.0.1:8444:8444 \
   --env-file ./desktop/.env \
   -v "$(pwd)/desktop/data/desktop:/home/admin" \
+  -v "$(pwd)/desktop/data/warp:/var/lib/cloudflare-warp" \
   oxzk/desktop:latest
 ```
 
@@ -48,6 +66,8 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 ## 内置软件
 
 在桌面终端使用 `uv`, `uvx` 和 `fastfetch`, 两种架构均安装这些工具. 工具安装在系统目录, 挂载 `/home/admin` 后仍可使用.
+
+使用官方 Linux `.tar.gz` 压缩包安装 Fastfetch, 将可执行文件放在 `/usr/local/bin/fastfetch`, 权限设为 `0755`.
 
 在 `linux/amd64` 桌面的应用菜单启动 Google Chrome 稳定版, 或在终端执行 `google-chrome`. `linux/arm64` 不安装 Chrome.
 
@@ -64,6 +84,7 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 | 配置 | 默认值 | 约束 |
 | --- | --- | --- |
 | `PASSWORD` | 必填 | 至少 6 个字符, 不包含换行 |
+| `WARP_ENABLED` | `true` | 仅接受 `true` 或 `false`, 控制 WARP 客户端启动和连接 |
 | `CLOUDFLARED_TOKEN` | 空 | 为空时创建 Quick Tunnel |
 | `KASMVNC_WEBSOCKET_PORT` | `8444` | 修改时同时更新端口映射和受管 Tunnel 配置 |
 | `DESKTOP_WIDTH` | `1920` | 1..8192 |
