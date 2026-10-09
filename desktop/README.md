@@ -33,6 +33,7 @@ docker compose logs -f desktop
 ```bash
 docker build -t oxzk/desktop:latest ./desktop
 docker run -d --name desktop --hostname vm --shm-size=2g \
+  --tmpfs /run:rw,nosuid,nodev,mode=755 \
   -p 127.0.0.1:8444:8444 \
   --env-file ./desktop/.env \
   -v "$(pwd)/desktop/data/desktop:/home/admin" \
@@ -58,15 +59,3 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 使用构建参数 `KASMVNC_VERSION` 和 `CLOUDFLARED_VERSION` 指定组件版本. 支持 `linux/amd64` 和 `linux/arm64` 对应的官方软件包.
 
 关键服务退出时容器返回非零状态, 由重启策略重新启动. 使用 `docker compose down` 停止服务, 保留宿主机数据目录.
-
-## 启动排查
-
-等待日志出现 `GNOME desktop ready` 后再连接桌面. 启动脚本会等待最多约 90 秒, 同时确认 `gnome-shell` 进程和 KasmVNC HTTP 响应, 然后启动 Cloudflared.
-
-遇到反复重启时, 检查容器日志中的服务名称, 退出状态和最近 120 行桌面会话日志. 需要更多上下文时, 在 `compose.yml` 所在目录读取挂载文件:
-
-```bash
-tail -n 200 ./data/desktop/.vnc/*:1.log
-```
-
-保持 GNOME 的 `gnome` 会话与 Shell 的 `user` 模式配套. 使用 `dbus-run-session -- gnome-session --session=gnome` 启动会话, 不添加 Ubuntu 24.04 的 GNOME 46 不支持的 `--builtin` 参数. 参考 `../remote-desktop` 时, 仅在具备 systemd 用户会话的环境使用其 `loginctl` 和 `systemctl --user` 配置.

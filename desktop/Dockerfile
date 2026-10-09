@@ -68,6 +68,14 @@ ENV LANG=zh_CN.UTF-8 \
     DESKTOP_WIDTH=1920 \
     DESKTOP_HEIGHT=1080
 
+# 容器不管理宿主机电源或物理 USB, 禁止将这些依赖 logind 的组件作为会话必需项.
+# 同时禁用自动启动, 避免仅修改 RequiredComponents 后仍反复拉起失败进程.
+RUN set -eux; \
+    for component in Power UsbProtection; do \
+        sed -i "s/org.gnome.SettingsDaemon.${component};//g" /usr/share/gnome-session/sessions/gnome.session; \
+        printf '\nHidden=true\n' >> "/etc/xdg/autostart/org.gnome.SettingsDaemon.${component}.desktop"; \
+    done
+
 COPY entrypoint.sh xstartup /opt/desktop/
 RUN chmod 755 /opt/desktop/*.sh /opt/desktop/xstartup
 
