@@ -16,3 +16,4 @@ services:
       - ./data/desktop:/home/admin
       - ./data/warp:/var/lib/cloudflare-warp
     restart: unless-stopped
+    stop_grace_period: 30s

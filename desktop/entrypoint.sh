@@ -19,6 +19,8 @@ fi
 require_number KASMVNC_WEBSOCKET_PORT 65535
 require_number DESKTOP_WIDTH 8192
 require_number DESKTOP_HEIGHT 8192
+SHUTDOWN_TIMEOUT="${SHUTDOWN_TIMEOUT:-15}"
+require_number SHUTDOWN_TIMEOUT 120
 WARP_ENABLED="${WARP_ENABLED:-true}"
 case "$WARP_ENABLED" in
     true|false) ;;
@@ -30,18 +32,36 @@ declare -A SERVICE_NAMES=()
 
 # 将停止信号传播到所有服务的进程组, 由 tini 回收孤儿进程.
 cleanup() {
-    local status=$? pid
-    trap - EXIT TERM INT
+    local status=$? pid pending deadline
+    trap - EXIT
+    trap '' TERM INT
     if [[ -n "${WARP_PID:-}" ]]; then
         if (( status != 0 && status != 130 && status != 143 )); then
             tail -n 40 /run/desktop/warp.log >&2 || true
         fi
         # 停止守护进程前先断开, 让客户端恢复它管理的路由和 DNS.
-        timeout 5 warp-cli --accept-tos disconnect >/dev/null 2>&1 || true
+        timeout --kill-after=1 5 warp-cli --accept-tos disconnect >/dev/null 2>&1 || true
     fi
+    deadline=$((SECONDS + SHUTDOWN_TIMEOUT))
     for pid in "${PIDS[@]}"; do
         kill -TERM -- "-$pid" 2>/dev/null || true
     done
+    while :; do
+        pending=0
+        for pid in "${PIDS[@]}"; do
+            if kill -0 -- "-$pid" 2>/dev/null; then pending=1; fi
+        done
+        (( pending != 0 )) || break
+        if (( SECONDS >= deadline )); then
+            printf 'Shutdown timed out, terminating remaining services\n' >&2
+            for pid in "${PIDS[@]}"; do
+                kill -KILL -- "-$pid" 2>/dev/null || true
+            done
+            break
+        fi
+        sleep 0.1
+    done
+    for pid in "${PIDS[@]}"; do wait "$pid" 2>/dev/null || true; done
     exit "$status"
 }
 trap cleanup EXIT
@@ -80,10 +100,7 @@ wait_until() {
 
 # 用真实出口请求确认 WARP 已接管流量, 避免把 CLI 接受连接请求当作连接成功.
 warp_connected() {
-    local trace
-    trace="$(curl --noproxy '*' --fail --silent --show-error \
-        --connect-timeout 3 --max-time 5 https://www.cloudflare.com/cdn-cgi/trace)" || return 1
-    grep -Eq '^warp=(on|plus)$' <<< "$trace"
+    /opt/desktop/healthcheck.sh warp
 }
 
 # 按开关初始化客户端, 复用持久化注册信息, 将守护进程纳入统一生命周期管理.
@@ -116,7 +133,7 @@ install -d -m 700 -o admin -g admin /home/admin /run/desktop "$XDG_RUNTIME_DIR"
 install -d -m 755 /run/dbus
 install -d -m 1777 /tmp/.X11-unix /tmp/.ICE-unix
 rm -f /run/dbus/pid /run/dbus/system_bus_socket "$XDG_RUNTIME_DIR/bus" \
-    /tmp/.X1-lock /tmp/.X11-unix/X1 "$XAUTHORITY"
+    /tmp/.X1-lock /tmp/.X11-unix/X1 "$XAUTHORITY" /run/desktop/ready
 dbus-uuidgen --ensure=/etc/machine-id
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
 install -m 600 -o admin -g admin /dev/null "$XAUTHORITY"
@@ -162,6 +179,7 @@ else
     start_service cloudflared cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:${KASMVNC_WEBSOCKET_PORT}"
 fi
 unset CLOUDFLARED_TOKEN
+touch /run/desktop/ready
 
 status=0
 wait -n -p exited_pid "${PIDS[@]}" || status=$?

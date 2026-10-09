@@ -40,6 +40,8 @@ WARP_ENABLED=false
 
 等待日志出现 `WARP connected`, 该提示表示实际出口检查返回 `warp=on` 或 `warp=plus`. 连接失败时让容器明确报错退出, 不自动切换为直连. 需要查看状态时在部署机器执行 `docker compose exec desktop warp-cli --accept-tos status`.
 
+通过容器健康状态观察运行期连接. 健康检查每 30 秒检查 X 服务, GNOME Shell, WARP 客户端连接状态和真实出口; 关闭 WARP 时跳过客户端与外网检查. 连续失败 3 次后标记为 `unhealthy`, 启动宽限期为 300 秒. 不要将 `unhealthy` 视为自动重启: Compose 的 `restart: unless-stopped` 只处理容器退出. 健康检查不修改路由, 不提供阻止直连的网络规则, 也不会主动断开或重连 WARP.
+
 Compose 中的设备映射和网络能力不会随 `WARP_ENABLED` 自动移除. 若宿主机不提供 TUN 设备, 关闭 WARP 后同时移除服务的 `devices` 和 `cap_add` 配置.
 
 ## 单独构建和运行
@@ -49,6 +51,7 @@ Compose 中的设备映射和网络能力不会随 `WARP_ENABLED` 自动移除. 
 ```bash
 docker build -t oxzk/desktop:latest ./desktop
 docker run -d --name desktop --hostname vm --shm-size=2g \
+  --stop-timeout 30 \
   --cap-add NET_ADMIN --device /dev/net/tun:/dev/net/tun \
   -p 127.0.0.1:8444:8444 \
   --env-file ./desktop/.env \
@@ -58,6 +61,8 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 ```
 
 使用默认绑定挂载 `./data/desktop:/home/admin`, 相对路径以 `compose.yml` 所在目录为基准, 对应仓库内的 `desktop/data/desktop`. 保留该目录以保存桌面文件和应用配置. 不要在多个容器间共用同一个桌面目录.
+
+在桌面设置中修改字体, 主题, 壁纸或收藏夹, 重建容器后保留这些用户设置. 修改镜像界面默认值时编辑 `99-desktop.gschema.override`, 不在启动脚本中重复执行 `gsettings set`. 已保存的用户值优先于镜像默认值.
 
 保持入口脚本以 root 启动, 由脚本将挂载目录本身的所有者设置为 `admin` (UID/GID 1000), 权限设置为 `0700`, 再以 `admin` 运行桌面. 确保挂载可读写且宿主机文件系统允许修改所有者和权限. 迁入已有文件时, 确保这些文件也允许 UID/GID 1000 访问; 启动脚本不会递归修改桌面数据的权限.
 
@@ -75,7 +80,7 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 
 在两种架构的应用菜单启动 Firefox, 或在终端执行 `firefox`. 使用 Mozilla 官方 deb 仓库的稳定版及简体中文语言包, 通过 APT 更新.
 
-通过构建参数 `UV_VERSION` 和 `FASTFETCH_VERSION` 固定工具版本, 默认使用 `latest`. 分别填写对应上游发布标签, 例如 uv 使用 `0.8.22`, fastfetch 使用 `2.52.0`. Chrome 使用构建时的官方稳定版.
+在 Dockerfile 中维护明确的工具版本, 当前默认值为 KasmVNC `1.5.0`, Cloudflared `2026.10.0`, uv `0.12.23`, Fastfetch `2.69.0`. 修改对应的 `ARG` 或使用 `--build-arg NAME=VALUE` 更新版本, 从官方固定版本地址下载对应架构的文件. Chrome, Firefox 和 WARP 通过各自的签名 APT 仓库安装, 版本在构建时解析.
 
 使用支持 BuildKit 的 Docker 构建镜像. 通过 `install.sh` 在同一层完成依赖安装与临时文件清理. 保留桌面组件, 字体, 语言资源和软件版权文件; 不安装离线手册及软件包说明文档.
 
@@ -85,6 +90,7 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 | --- | --- | --- |
 | `PASSWORD` | 必填 | 至少 6 个字符, 不包含换行 |
 | `WARP_ENABLED` | `true` | 仅接受 `true` 或 `false`, 控制 WARP 客户端启动和连接 |
+| `SHUTDOWN_TIMEOUT` | `15` | 服务退出等待秒数, 允许 1..120; 容器停止宽限期须额外预留 WARP 断开时间 |
 | `CLOUDFLARED_TOKEN` | 空 | 为空时创建 Quick Tunnel |
 | `KASMVNC_WEBSOCKET_PORT` | `8444` | 修改时同时更新端口映射和受管 Tunnel 配置 |
 | `DESKTOP_WIDTH` | `1920` | 1..8192 |
@@ -93,3 +99,7 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 使用构建参数 `KASMVNC_VERSION` 和 `CLOUDFLARED_VERSION` 指定组件版本. 支持 `linux/amd64` 和 `linux/arm64` 对应的官方软件包.
 
 关键服务退出时容器返回非零状态, 由重启策略重新启动. 使用 `docker compose down` 停止服务, 保留宿主机数据目录.
+
+保持 Compose 的 `stop_grace_period` 大于 `SHUTDOWN_TIMEOUT` 至少 7 秒, 当前默认 30 秒. 停止时先断开 WARP, 再通知服务进程组退出并等待落盘, 仅对超时进程强制终止.
+
+查看 `/usr/local/share/image-build/versions.txt` 获取实际安装版本, 查看 OCI 标签 `org.opencontainers.image.revision` 获取源码提交. 工作流分别在 amd64 和 arm64 原生 Linux runner 上构建, 两种架构构建成功后合并发布 `latest`, 并发布唯一的 `sha-<commit>-<run_id>-<run_attempt>` 标签. 不将构建成功视为桌面或 WARP 运行验证通过.

@@ -60,15 +60,25 @@ php/
 docker build -t oxzk/code-server ./code-server
 ```
 
-本地运行并同时暴露 code-server 与 SSH:
+在 `code-server/.env` 中设置自己的登录密码, 至少 6 个字符且不包含换行. 不再提供默认密码:
+
+```dotenv
+PASSWORD=replace-with-your-password
+```
+
+在部署机器运行, 将 code-server 与 SSH 绑定到宿主机回环地址, 并保留独立的 SSH 主机密钥目录:
 
 ```bash
 docker run --rm -it \
-    -p 9091:9091 \
-    -p 2222:22 \
-    -e PASSWORD=code001 \
+    --stop-timeout 30 \
+    -p 127.0.0.1:9091:9091 \
+    -p 127.0.0.1:2222:22 \
+    --env-file ./code-server/.env \
+    -v "$PWD/code-server/data/ssh:/var/lib/code-server/ssh" \
     oxzk/code-server
 ```
+
+使用 Compose 时, 在 `code-server` 目录执行 `docker compose up -d`. 保留 `./data/workspace` 和 `./data/ssh`, 分别保存工作区与 SSH 主机密钥. 不要在多个实例之间共用主机密钥目录. 从旧镜像迁移时核对新的 SSH 指纹, 首次更新会替换旧镜像内共享的主机身份.
 
 VS Code Remote-SSH 连接:
 
@@ -79,9 +89,11 @@ Host local-code-server
     User root
 ```
 
-SSH 密码与 code-server Web 登录密码共用 `PASSWORD`.
+SSH 密码与 code-server Web 登录密码共用 `PASSWORD`. 用 `SERVER_PORT` 和 `SSH_PORT` 修改容器监听端口时, 同步修改宿主机端口映射.
 
-通过 uv 直接安装 Python, 不创建或自动激活虚拟环境. Python, uv, Go, Rust, Node.js, pnpm, Deno, Codex 和 Wrangler 的路径由镜像统一配置, 可直接用于终端和编辑器任务. 挂载 `/workspace` 不会覆盖 Python 安装.
+保持入口进程为 `tini`, 由启动脚本管理 SSH 和编辑器进程组. 使用 `SHUTDOWN_TIMEOUT` 设置服务退出等待时间, 默认 15 秒, 允许 1..120 秒. 调大该值时同步调大 Compose 的 `stop_grace_period`, 或单独运行时的 `--stop-timeout`. SSH 日志直接输出到容器日志.
+
+通过 uv 直接安装 Python, 不创建或自动激活虚拟环境. Python, uv, Go, Rust, Node.js, pnpm, Deno, Codex 和 Wrangler 的路径由镜像统一配置, 可直接用于终端和编辑器任务. 使用内置的 `build-essential` 和 `pkg-config` 编译 Rust 程序及原生扩展. 挂载 `/workspace` 不会覆盖 Python 安装.
 
 在 Git 仓库中执行 `ginit [临时名称]`, 默认临时名称为 `new-branch`. 命令使用独立索引从当前工作区创建单个 `init` 根提交, 读取 `origin` 推送地址上 main 的 SHA, 再使用显式 `--force-with-lease` 推送. 推送成功后更新本地 main 和索引; 推送失败时保留原本地分支, 原索引及工作区文件. 临时引用位于 `refs/ginit/`, 退出时自动清理. 仅在手动执行时重写分支历史, 不运行提交钩子.
 
@@ -89,16 +101,20 @@ SSH 密码与 code-server Web 登录密码共用 `PASSWORD`.
 
 ```bash
 docker run --rm -it \
-    -p 9091:9091 -p 2222:22 \
-    -e PASSWORD=code001 \
+    --stop-timeout 30 \
+    -p 127.0.0.1:9091:9091 -p 127.0.0.1:2222:22 \
+    --env-file ./code-server/.env \
+    -v "$PWD/code-server/data/ssh:/var/lib/code-server/ssh" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$PWD":/workspace \
     oxzk/code-server
 ```
 
-工具版本和插件提交集中在 `code-server/Dockerfile` 的 `ARG` 中, 可用 `--build-arg NAME=VALUE` 显式更新. 系统 APT 包和未指定版本的编辑器扩展仍在构建时解析. Shell 插件使用固定提交源码, 已关闭 Oh My Zsh 自动更新.
+在 `code-server/Dockerfile` 对应工具层的 `ARG` 中更新版本, 或使用 `--build-arg NAME=VALUE` 覆盖. 从官方固定版本地址下载工具, 使用固定提交安装 Shell 插件. 系统 APT 包和未指定版本的编辑器扩展仍在构建时解析. 保持 Oh My Zsh 自动更新关闭.
 
-编辑 `code-server/config/` 下的终端, Vim, Git 和编辑器配置, 或修改独立的 `ginit` 脚本, 不会使工具安装层失效. 编辑 `code-server/extensions.txt` 管理扩展; 每行支持 `publisher.name@version`. APT 软件索引和下载包使用 BuildKit 缓存, 安装脚本只清理自身下载缓存.
+按工具组维护独立安装层. 修改后面工具层的版本时复用前面的安装层; 编辑 `code-server/config/` 或 `ginit` 不会使工具安装层失效. 编辑 `code-server/extensions.txt` 管理扩展, 每行支持 `publisher.name@version`. APT 缓存挂载在同一 BuildKit 构建器中复用; GitHub Actions 的 GHA 缓存保存构建层, 不跨临时 runner 保存 APT 缓存挂载内容.
+
+查看镜像内 `/usr/local/share/image-build/versions.txt` 获取工具参数和实际系统包版本, 查看 OCI 标签 `org.opencontainers.image.revision` 获取源码提交. 工作流在 amd64 和 arm64 原生 Linux runner 上分别构建, 两种架构构建成功后合并发布 `latest`. 使用 `sha-<commit>-<run_id>-<run_attempt>` 标签部署具体发布, 避免后续构建覆盖同一发布标签. 不将构建成功视为运行验证通过.
 
 ## camoufox
 

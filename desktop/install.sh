@@ -5,26 +5,24 @@ export DEBIAN_FRONTEND=noninteractive
 arch="${TARGETARCH:-$(dpkg --print-architecture)}"
 # Fastfetch 使用 aarch64 命名 ARM64 压缩包, 其他下载源仍使用 Debian 的 arm64.
 case "$arch" in
-    amd64) fastfetch_arch=amd64 ;;
-    arm64) fastfetch_arch=aarch64 ;;
+    amd64) fastfetch_arch=amd64; machine_arch=x86_64 ;;
+    arm64) fastfetch_arch=aarch64; machine_arch=aarch64 ;;
     *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 
 # 下载失败时输出对应 URL 并保留 curl 退出码, 让构建错误能定位到具体软件包.
 download() {
     local status=0
-    curl --fail --silent --show-error --location --retry 3 "$1" -o "$2" || status=$?
+    curl --fail --silent --show-error --location --connect-timeout 20 --max-time 600 --retry 3 --retry-max-time 1800 "$1" -o "$2" || status=$?
     if (( status != 0 )); then
         printf 'Download failed (curl exit %s): %s\n' "$status" "$1" >&2
         return "$status"
     fi
 }
 
-# 统一解析 GitHub 的固定版本和最新版本下载地址.
+# 按指定版本构造 GitHub 发布文件的下载地址.
 release_url() {
-    local repository="$1" version="$2" asset="$3" path="download/$2"
-    if [[ "$version" == latest ]]; then path=latest/download; fi
-    printf 'https://github.com/%s/releases/%s/%s' "$repository" "$path" "$asset"
+    printf 'https://github.com/%s/releases/download/%s/%s' "$1" "$2" "$3"
 }
 
 # 安装前排除离线文档, 保留版权文件和全部运行时语言资源.
@@ -58,8 +56,13 @@ printf '%s\n' \
 download "$(release_url kasmtech/KasmVNC "v${KASMVNC_VERSION}" "kasmvncserver_noble_${KASMVNC_VERSION}_${arch}.deb")" /tmp/kasmvnc.deb
 packages=(/tmp/kasmvnc.deb firefox firefox-l10n-zh-cn)
 if [[ "$arch" == amd64 ]]; then
-    download https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb /tmp/google-chrome.deb
-    packages+=(/tmp/google-chrome.deb)
+    # 浏览器通过签名 APT 仓库更新, 避免直接下载会变化的 current deb 包.
+    download https://dl.google.com/linux/linux_signing_key.pub /etc/apt/keyrings/google-chrome.asc
+    chmod 0644 /etc/apt/keyrings/google-chrome.asc
+    printf '%s\n' \
+        'deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.asc] https://dl.google.com/linux/chrome/deb/ stable main' \
+        > /etc/apt/sources.list.d/google-chrome.list
+    packages+=(google-chrome-stable)
 fi
 
 # 一次求解桌面和应用依赖, 避免分层更新相同的库和包数据库.
@@ -88,10 +91,11 @@ install -d -m 0755 /usr/local/bin /usr/share/doc/fastfetch
 install -m 0755 "/tmp/$fastfetch_root/usr/bin/fastfetch" /usr/local/bin/fastfetch
 install -m 0644 "/tmp/$fastfetch_root/usr/share/licenses/fastfetch/LICENSE" /usr/share/doc/fastfetch/copyright
 
-uv_path="${UV_VERSION}/install.sh"
-if [[ "$UV_VERSION" == latest ]]; then uv_path=install.sh; fi
-download "https://astral.sh/uv/${uv_path}" /tmp/uv-install.sh
-UV_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/uv-install.sh
+uv_target="${machine_arch}-unknown-linux-gnu"
+download "$(release_url astral-sh/uv "$UV_VERSION" "uv-${uv_target}.tar.gz")" /tmp/uv.tar.gz
+tar -xzf /tmp/uv.tar.gz -C /tmp
+install -m 0755 "/tmp/uv-${uv_target}/uv" /usr/local/bin/uv
+install -m 0755 "/tmp/uv-${uv_target}/uvx" /usr/local/bin/uvx
 download "$(release_url cloudflare/cloudflared "$CLOUDFLARED_VERSION" "cloudflared-linux-${arch}")" /usr/local/bin/cloudflared
 chmod 0755 /usr/local/bin/cloudflared
 
@@ -114,6 +118,12 @@ warp-cli --version
 command -v warp-svc
 command -v Xvnc
 command -v vncpasswd
+
+# 记录固定工具版本和 APT 实际解析的版本, 供发布后排查.
+install -d /usr/local/share/image-build
+{ printenv | LC_ALL=C sort | grep -E '^[A-Z_]+_VERSION=';
+  dpkg-query -W -f='${binary:Package}=${Version}\n'; } \
+    > /usr/local/share/image-build/versions.txt
 
 # 在创建安装层之前清理临时文件, 避免后续层删除仍占用底层空间.
 apt-get clean

@@ -1,0 +1,13 @@
+services:
+  code-server:
+    image: oxzk/code-server:latest
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:9091:9091"
+      - "127.0.0.1:2222:22"
+    volumes:
+      - ./data/workspace:/workspace
+      - ./data/ssh:/var/lib/code-server/ssh
+    restart: unless-stopped
+    stop_grace_period: 30s

@@ -11,7 +11,7 @@ log() {
 download() {
     curl --fail --silent --show-error --location \
         --connect-timeout 20 --max-time 600 --retry 3 --retry-max-time 1800 \
-        "$1" -o "$2"
+        "$1" -o "$2" || return "$?"
 }
 
 # 从完整下载的脚本执行安装, 避免下载与执行同时进行.
@@ -137,14 +137,17 @@ install_code_server() {
 # 只删除构建下载缓存, 不删除工具源码资源或 APT 的 BuildKit 缓存.
 cleanup_image() {
     log 'Removing build caches'
-    npm cache clean --force
-    pnpm store prune
+    if [[ "$INSTALL_COMPONENT" == node ]]; then
+        npm cache clean --force
+        pnpm store prune
+    fi
     rm -rf /root/.cache/uv /root/.npm /root/.nvm/.cache \
         /root/.rustup/downloads /root/.rustup/tmp
 }
 
 # 按依赖顺序安装, 为各平台选择匹配的官方二进制包.
 main() {
+    INSTALL_COMPONENT="${1:?Set an installation component}"
     BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}"
     case "$BUILD_ARCH" in
         amd64) MACHINE_ARCH=x86_64 ;;
@@ -153,16 +156,19 @@ main() {
     esac
     RUST_TARGET="${MACHINE_ARCH}-unknown-linux-gnu"
     INSTALL_TMP_DIR="$(mktemp -d /tmp/code-server-install.XXXXXX)"
-    readonly BUILD_ARCH MACHINE_ARCH RUST_TARGET INSTALL_TMP_DIR
+    readonly INSTALL_COMPONENT BUILD_ARCH MACHINE_ARCH RUST_TARGET INSTALL_TMP_DIR
     trap 'rm -rf "$INSTALL_TMP_DIR"' EXIT
-    install_shell
-    install_docker_cli
-    install_go
-    install_python
-    install_node
-    install_rust
-    install_utilities
-    install_code_server
+    case "$INSTALL_COMPONENT" in
+        shell) install_shell ;;
+        docker) install_docker_cli ;;
+        go) install_go ;;
+        python) install_python ;;
+        node) install_node ;;
+        rust) install_rust ;;
+        utilities) install_utilities ;;
+        editor) install_code_server ;;
+        *) printf 'Unknown installation component: %s\n' "$INSTALL_COMPONENT" >&2; exit 1 ;;
+    esac
     cleanup_image
 }
 

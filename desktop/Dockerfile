@@ -3,9 +3,9 @@ FROM ubuntu:24.04
 
 ARG TARGETARCH
 ARG KASMVNC_VERSION=1.5.0
-ARG CLOUDFLARED_VERSION=latest
-ARG UV_VERSION=latest
-ARG FASTFETCH_VERSION=latest
+ARG CLOUDFLARED_VERSION=2026.10.0
+ARG UV_VERSION=0.12.23
+ARG FASTFETCH_VERSION=2.69.0
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # 使用临时构建挂载执行安装, 将软件安装与清理收敛到同一层.
@@ -29,11 +29,19 @@ ENV LANG=zh_CN.UTF-8 \
     GALLIUM_DRIVER=llvmpipe \
     GSK_RENDERER=cairo \
     WARP_ENABLED=true \
+    SHUTDOWN_TIMEOUT=15 \
     KASMVNC_WEBSOCKET_PORT=8444 \
     DESKTOP_WIDTH=1920 \
     DESKTOP_HEIGHT=1080
 
-COPY --chmod=755 entrypoint.sh desktop-settings.sh /opt/desktop/
+COPY --chmod=755 entrypoint.sh desktop-settings.sh healthcheck.sh /opt/desktop/
+COPY 99-desktop.gschema.override /usr/share/glib-2.0/schemas/
+RUN glib-compile-schemas --strict /usr/share/glib-2.0/schemas
+
+ARG BUILD_REVISION=unknown
+LABEL org.opencontainers.image.revision=$BUILD_REVISION
+HEALTHCHECK --interval=30s --timeout=20s --start-period=300s --retries=3 \
+    CMD ["/opt/desktop/healthcheck.sh"]
 
 WORKDIR /home/admin
 EXPOSE 8444
