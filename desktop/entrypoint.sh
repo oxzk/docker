@@ -108,8 +108,7 @@ for component in xsettings keyboard media-keys sound a11y-settings; do
     start_service "settings-$component" runuser -u admin -- "/usr/libexec/gsd-$component"
 done
 start_service gnome-shell runuser -u admin -- gnome-shell --x11 --mode=ubuntu
-wait_until desktop /opt/desktop/desktop-ready.sh
-printf 'GNOME desktop ready: http://localhost:%s, username=admin\n' "$KASMVNC_WEBSOCKET_PORT"
+printf 'GNOME desktop starting: http://localhost:%s, username=admin\n' "$KASMVNC_WEBSOCKET_PORT"
 
 if [[ -n "${CLOUDFLARED_TOKEN:-}" ]]; then
     start_service cloudflared env TUNNEL_TOKEN="$CLOUDFLARED_TOKEN" cloudflared tunnel --no-autoupdate run

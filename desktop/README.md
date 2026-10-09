@@ -45,6 +45,20 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 
 更新入口脚本后, 先构建并发布新版镜像, 再执行 `docker compose pull desktop` 和 `docker compose up -d desktop` 拉取镜像并重新创建容器.
 
+## 内置软件
+
+在桌面终端使用 `uv`, `uvx` 和 `fastfetch`, 两种架构均安装这些工具. 工具安装在系统目录, 挂载 `/home/admin` 后仍可使用.
+
+在 `linux/amd64` 桌面的应用菜单启动 Google Chrome 稳定版, 或在终端执行 `google-chrome`. `linux/arm64` 不安装 Chrome.
+
+保留 Chrome 默认沙箱. 若启动时出现 `Failed to move to new namespace` 或 `Operation not permitted`, 检查宿主机及容器对用户命名空间和沙箱的权限限制; 当前验证环境存在该限制, 尚未验证 Chrome 页面渲染.
+
+在两种架构的应用菜单启动 Firefox, 或在终端执行 `firefox`. 使用 Mozilla 官方 deb 仓库的稳定版及简体中文语言包, 通过 APT 更新.
+
+通过构建参数 `UV_VERSION` 和 `FASTFETCH_VERSION` 固定工具版本, 默认使用 `latest`. 分别填写对应上游发布标签, 例如 uv 使用 `0.8.22`, fastfetch 使用 `2.52.0`. Chrome 使用构建时的官方稳定版.
+
+使用支持 BuildKit 的 Docker 构建镜像. 通过 `install.sh` 在同一层完成依赖安装与临时文件清理. 保留桌面组件, 字体, 语言资源和软件版权文件; 不安装离线手册及软件包说明文档.
+
 ## 配置
 
 | 配置 | 默认值 | 约束 |
