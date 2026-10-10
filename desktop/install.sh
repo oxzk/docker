@@ -81,15 +81,12 @@ apt-get install -y --no-install-recommends \
         procps ssl-cert xauth x11-utils x11-xserver-utils xdg-user-dirs \
     "${packages[@]}"
 
-# 从官方 Linux 压缩包安装可执行文件, 仅提取运行文件和分发所需的许可证.
+# 从官方 Linux 压缩包中仅提取并安装 Fastfetch 可执行文件.
 download "$(release_url fastfetch-cli/fastfetch "$FASTFETCH_VERSION" "fastfetch-linux-${fastfetch_arch}.tar.gz")" /tmp/fastfetch.tar.gz
 fastfetch_root="fastfetch-linux-${fastfetch_arch}"
-tar -xzf /tmp/fastfetch.tar.gz -C /tmp \
-    "$fastfetch_root/usr/bin/fastfetch" \
-    "$fastfetch_root/usr/share/licenses/fastfetch/LICENSE"
-install -d -m 0755 /usr/local/bin /usr/share/doc/fastfetch
+tar -xzf /tmp/fastfetch.tar.gz -C /tmp "$fastfetch_root/usr/bin/fastfetch"
+install -d -m 0755 /usr/local/bin
 install -m 0755 "/tmp/$fastfetch_root/usr/bin/fastfetch" /usr/local/bin/fastfetch
-install -m 0644 "/tmp/$fastfetch_root/usr/share/licenses/fastfetch/LICENSE" /usr/share/doc/fastfetch/copyright
 
 uv_target="${machine_arch}-unknown-linux-gnu"
 download "$(release_url astral-sh/uv "$UV_VERSION" "uv-${uv_target}.tar.gz")" /tmp/uv.tar.gz

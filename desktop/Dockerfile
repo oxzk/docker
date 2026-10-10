@@ -34,7 +34,7 @@ ENV LANG=zh_CN.UTF-8 \
     DESKTOP_WIDTH=1920 \
     DESKTOP_HEIGHT=1080
 
-COPY --chmod=755 entrypoint.sh desktop-settings.sh healthcheck.sh /opt/desktop/
+COPY --chmod=755 entrypoint.sh desktop-settings.sh healthcheck.sh warp-service.sh /opt/desktop/
 COPY 99-desktop.gschema.override /usr/share/glib-2.0/schemas/
 RUN glib-compile-schemas --strict /usr/share/glib-2.0/schemas
 

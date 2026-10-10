@@ -35,13 +35,6 @@ cleanup() {
     local status=$? pid pending deadline
     trap - EXIT
     trap '' TERM INT
-    if [[ -n "${WARP_PID:-}" ]]; then
-        if (( status != 0 && status != 130 && status != 143 )); then
-            tail -n 40 /run/desktop/warp.log >&2 || true
-        fi
-        # 停止守护进程前先断开, 让客户端恢复它管理的路由和 DNS.
-        timeout --kill-after=1 5 warp-cli --accept-tos disconnect >/dev/null 2>&1 || true
-    fi
     deadline=$((SECONDS + SHUTDOWN_TIMEOUT))
     for pid in "${PIDS[@]}"; do
         kill -TERM -- "-$pid" 2>/dev/null || true
@@ -98,47 +91,6 @@ wait_until() {
     done
 }
 
-# 用真实出口请求确认 WARP 已接管流量, 避免把 CLI 接受连接请求当作连接成功.
-warp_connected() {
-    /opt/desktop/healthcheck.sh warp
-}
-
-# 按开关初始化客户端, 复用持久化注册信息, 将守护进程纳入统一生命周期管理.
-start_warp() {
-    [[ "$WARP_ENABLED" != off ]] || return 0
-    # 仅全局隧道模式需要内核设备和网络管理权限, 本地代理使用用户态连接.
-    if [[ "$WARP_ENABLED" == tun ]]; then
-        if [[ ! -c /dev/net/tun ]]; then
-            printf 'WARP requires /dev/net/tun to be passed into the container\n' >&2
-            exit 1
-        fi
-        if ! capsh --has-p=cap_net_admin >/dev/null 2>&1; then
-            printf 'WARP requires the NET_ADMIN container capability\n' >&2
-            exit 1
-        fi
-    fi
-    install -d -m 700 /var/lib/cloudflare-warp
-    start_service warp warp-svc > /run/desktop/warp.log 2>&1
-    WARP_PID=$!
-    # 未注册时连接状态本来就不正常, 使用配置接口确认守护进程已经就绪.
-    wait_until warp-daemon timeout 2 warp-cli --accept-tos settings
-    if [[ ! -s /var/lib/cloudflare-warp/reg.json ]]; then
-        timeout 30 warp-cli --accept-tos registration new >/dev/null
-    fi
-    if [[ "$WARP_ENABLED" == proxy ]]; then
-        timeout 10 warp-cli --accept-tos mode proxy >/dev/null
-        timeout 10 warp-cli --accept-tos proxy port 40000 >/dev/null
-    else
-        timeout 10 warp-cli --accept-tos mode warp+doh >/dev/null
-    fi
-    timeout 10 warp-cli --accept-tos connect >/dev/null
-    wait_until warp-connection warp_connected
-    printf 'WARP connected\n'
-    if [[ "$WARP_ENABLED" == proxy ]]; then
-        printf 'WARP SOCKS5 proxy: 127.0.0.1:40000 (configure applications to use it)\n'
-    fi
-}
-
 # 各次启动重新创建本容器的认证文件和套接字, 持久化目录只存用户数据.
 install -d -m 700 -o admin -g admin /home/admin /run/desktop "$XDG_RUNTIME_DIR"
 install -d -m 755 /run/dbus
@@ -157,7 +109,6 @@ unset PASSWORD
 
 start_service system-bus dbus-daemon --system --nofork --nopidfile
 wait_until system-bus test -S /run/dbus/system_bus_socket
-start_warp
 start_service user-bus runuser -u admin -- dbus-daemon --session --nofork --nopidfile \
     --address="$DBUS_SESSION_BUS_ADDRESS"
 wait_until user-bus runuser -u admin -- timeout 2 gdbus call --session \
@@ -192,8 +143,14 @@ fi
 unset CLOUDFLARED_TOKEN
 touch /run/desktop/ready
 
+# 桌面关键服务与可选 WARP 分开监控, WARP 初始化或退出不终止桌面.
+CRITICAL_PIDS=("${PIDS[@]}")
+if [[ "$WARP_ENABLED" != off ]]; then
+    start_service warp /opt/desktop/warp-service.sh
+fi
+
 status=0
-wait -n -p exited_pid "${PIDS[@]}" || status=$?
+wait -n -p exited_pid "${CRITICAL_PIDS[@]}" || status=$?
 printf 'Service %s exited (status=%s)\n' "${SERVICE_NAMES[${exited_pid:-0}]:-unknown}" "$status" >&2
 (( status != 0 )) || status=1
 exit "$status"

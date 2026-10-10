@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 同时检查本地桌面就绪状态和实际 WARP 出口, 健康检查不会主动切换直连.
+# 默认仅检查桌面, 显式传入 warp 时单独检查 WARP 出口.
 set -Eeuo pipefail
 
 # CLI 状态确认本容器的客户端已连接, 出口探测确认数据平面可用.
@@ -20,11 +20,12 @@ check_warp() {
     grep -Eq '^warp=(on|plus)$' <<< "$trace"
 }
 
-if [[ "${1:-}" != warp ]]; then
+if [[ "${1:-}" == warp ]]; then
+    check_warp
+else
     test -f /run/desktop/ready
     runuser -u admin -- timeout 3 xdpyinfo -display "$DISPLAY" >/dev/null
     runuser -u admin -- timeout 3 gdbus call --session \
         --dest org.gnome.Shell --object-path /org/gnome/Shell \
         --method org.freedesktop.DBus.Peer.Ping >/dev/null
 fi
-check_warp

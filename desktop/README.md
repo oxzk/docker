@@ -36,7 +36,7 @@ docker compose logs -f desktop
 WARP_ENABLED=proxy
 ```
 
-使用默认 Compose, 无需配置 `devices` 和 `cap_add`; 从旧配置迁移时删除这两项, 然后重新创建容器. 使用容器内的 SOCKS5 或 HTTP CONNECT 代理 `127.0.0.1:40000`, 无需发布代理端口. 在需要使用 WARP 的应用中显式配置该代理; 对浏览器启用通过 SOCKS5 代理解析 DNS. 不要将代理模式视为全局流量接管, 未配置代理的应用和 Cloudflared 仍使用直连网络.
+使用默认 Compose, 保留 `cap_add: [NET_ADMIN]`, 无需配置 `devices`. 当前 Linux WARP 客户端在代理模式下也需要安装 fwmark 策略路由; 缺少权限时会因 `FirewallRepairFailed` 反复断开. 从旧配置迁移时移除 TUN 设备映射并保留网络权限, 然后重新创建容器. 使用容器内的 SOCKS5 或 HTTP CONNECT 代理 `127.0.0.1:40000`, 无需发布代理端口. 在需要使用 WARP 的应用中显式配置该代理; 对浏览器启用通过 SOCKS5 代理解析 DNS. 不要将代理模式视为全局流量接管, 未配置代理的应用和 Cloudflared 仍使用直连网络.
 
 在容器内验证代理出口:
 
@@ -44,7 +44,7 @@ WARP_ENABLED=proxy
 curl --noproxy '' --proxy socks5h://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace
 ```
 
-确认响应包含 `warp=on` 或 `warp=plus`. 启动检查和健康检查均使用该代理验证出口; 代理不可用时判定失败.
+确认响应包含 `warp=on` 或 `warp=plus`. 使用独立 WARP 检查通过该代理验证出口; 代理不可用时返回失败, 不影响桌面健康状态.
 
 需要通过全局隧道处理容器的出站流量和 DNS 时, 在 `.env` 中设置:
 
@@ -52,16 +52,14 @@ curl --noproxy '' --proxy socks5h://127.0.0.1:40000 https://www.cloudflare.com/c
 WARP_ENABLED=tun
 ```
 
-确保 Docker 宿主机提供 `/dev/net/tun`, 并在 Compose 的 `services.desktop` 下添加:
+确保 Docker 宿主机提供 `/dev/net/tun`, 保留已有 `cap_add`, 并在 Compose 的 `services.desktop` 下添加:
 
 ```yaml
-    cap_add:
-      - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
 ```
 
-使用该模式启动 WARP 的 `warp+doh` 隧道. 使用下方 `docker run` 命令时, 为 `tun` 模式添加 `--cap-add NET_ADMIN --device /dev/net/tun:/dev/net/tun`.
+使用该模式启动 WARP 的 `warp+doh` 隧道. 使用下方 `docker run` 命令时, 为 `tun` 模式额外添加 `--device /dev/net/tun:/dev/net/tun`.
 
 需要关闭 WARP 时, 在 `.env` 中设置:
 
@@ -71,11 +69,11 @@ WARP_ENABLED=off
 
 修改模式后执行 `docker compose up -d desktop` 重新创建容器. 使用 `off` 跳过 `warp-svc` 启动, 注册和连接, 保留已安装的 `warp-cli` 和注册数据. 继续按原配置启动 Cloudflared Tunnel.
 
-等待日志出现 `WARP connected`, 该提示表示实际出口检查返回 `warp=on` 或 `warp=plus`. 连接失败时让容器明确报错退出, 不自动切换为直连. 需要查看状态时在部署机器执行 `docker compose exec desktop warp-cli --accept-tos status`.
+先连接桌面, 无需等待 WARP 初始化完成. 通过日志中的 `WARP connected` 确认实际出口检查返回 `warp=on` 或 `warp=plus`. WARP 初始化超时或失败时查看错误日志, 桌面继续运行; 守护进程尚存时可通过 `docker compose exec desktop warp-cli --accept-tos status` 检查并手动重连. WARP 守护进程退出不会终止或重启桌面容器.
 
-通过容器健康状态观察运行期连接. 健康检查每 30 秒检查 X 服务, GNOME Shell, WARP 客户端连接状态和真实出口; 关闭 WARP 时跳过客户端与外网检查. 连续失败 3 次后标记为 `unhealthy`, 启动宽限期为 300 秒. 不要将 `unhealthy` 视为自动重启: Compose 的 `restart: unless-stopped` 只处理容器退出. 健康检查不修改路由, 不提供阻止直连的网络规则, 也不会主动断开或重连 WARP.
+通过容器健康状态观察桌面: 每 30 秒检查桌面就绪标记, X 服务和 GNOME Shell, 连续失败 3 次后标记为 `unhealthy`, 启动宽限期为 300 秒. 不将 WARP 连通性纳入桌面健康检查. 单独执行 `docker compose exec desktop /opt/desktop/healthcheck.sh warp` 检查 WARP 客户端状态和实际出口, 通过 `/run/desktop/warp.log` 查看守护进程日志. 不要将 `unhealthy` 视为自动重启, Compose 的重启策略只处理容器退出. 使用代理的应用仍需等待代理可用; 使用 `tun` 时仍需考虑系统路由变化对网络连接的影响, 桌面进程独立运行不代表隧道网络故障不会影响远程网络路径.
 
-从 `tun` 切换到 `proxy` 或 `off` 时, 移除自行添加的 `devices` 和 `cap_add`; 不要依赖环境变量自动移除设备映射和网络能力.
+从 `tun` 切换到 `proxy` 时, 移除自行添加的 `devices`, 保留 `cap_add: [NET_ADMIN]`. 切换到 `off` 时可同时移除这两项; 不要依赖环境变量自动移除设备映射和网络能力.
 
 ## 单独构建和运行
 
@@ -85,6 +83,8 @@ WARP_ENABLED=off
 docker build -t oxzk/desktop:latest ./desktop
 docker run -d --name desktop --hostname vm --shm-size=2g \
   --stop-timeout 30 \
+  --cap-add NET_ADMIN \
+  --security-opt seccomp=unconfined \
   -p 127.0.0.1:8444:8444 \
   --env-file ./desktop/.env \
   -v "$(pwd)/desktop/data/desktop:/home/admin" \
@@ -104,17 +104,17 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 
 在桌面终端使用 `uv`, `uvx` 和 `fastfetch`, 两种架构均安装这些工具. 工具安装在系统目录, 挂载 `/home/admin` 后仍可使用.
 
-使用官方 Linux `.tar.gz` 压缩包安装 Fastfetch, 将可执行文件放在 `/usr/local/bin/fastfetch`, 权限设为 `0755`.
+使用官方 Linux `.tar.gz` 压缩包, 仅提取 Fastfetch 可执行文件到 `/usr/local/bin/fastfetch`, 权限设为 `0755`.
 
 在 `linux/amd64` 桌面的应用菜单启动 Google Chrome 稳定版, 或在终端执行 `google-chrome`. `linux/arm64` 不安装 Chrome.
 
-保留 Chrome 默认沙箱. 若启动时出现 `Failed to move to new namespace` 或 `Operation not permitted`, 检查宿主机及容器对用户命名空间和沙箱的权限限制; 当前验证环境存在该限制, 尚未验证 Chrome 页面渲染.
+以 `admin` 运行 Chrome, 保留 Chrome 默认沙箱. 在 Compose 中使用 `security_opt: [seccomp=unconfined]`, 关闭本层 Docker 的 seccomp 过滤以允许创建沙箱命名空间, 无需自定义规则文件. 修改配置后重新创建容器. 若仍出现 `Operation not permitted`, 检查外层容器或宿主机的用户命名空间限制.
 
 在两种架构的应用菜单启动 Firefox, 或在终端执行 `firefox`. 使用 Mozilla 官方 deb 仓库的稳定版及简体中文语言包, 通过 APT 更新.
 
 在 Dockerfile 中维护明确的工具版本, 当前默认值为 KasmVNC `1.5.0`, Cloudflared `2026.10.0`, uv `0.12.23`, Fastfetch `2.69.0`. 修改对应的 `ARG` 或使用 `--build-arg NAME=VALUE` 更新版本, 从官方固定版本地址下载对应架构的文件. Chrome, Firefox 和 WARP 通过各自的签名 APT 仓库安装, 版本在构建时解析.
 
-使用支持 BuildKit 的 Docker 构建镜像. 通过 `install.sh` 在同一层完成依赖安装与临时文件清理. 保留桌面组件, 字体, 语言资源和软件版权文件; 不安装离线手册及软件包说明文档.
+使用支持 BuildKit 的 Docker 构建镜像. 通过 `install.sh` 在同一层完成依赖安装与临时文件清理. 保留桌面组件, 字体, 语言资源和 APT 软件包版权文件; 不安装离线手册及软件包说明文档.
 
 ## 配置
 
@@ -130,8 +130,8 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 
 使用构建参数 `KASMVNC_VERSION` 和 `CLOUDFLARED_VERSION` 指定组件版本. 支持 `linux/amd64` 和 `linux/arm64` 对应的官方软件包.
 
-关键服务退出时容器返回非零状态, 由重启策略重新启动. 使用 `docker compose down` 停止服务, 保留宿主机数据目录.
+将 D-Bus, Xvnc, GNOME 设置服务, GNOME Shell 和 Cloudflared 作为关键服务; 任一退出时让容器返回非零状态并由重启策略重启. 将 WARP 作为独立可选服务, 不因其失败退出容器. 使用 `docker compose down` 停止服务, 保留宿主机数据目录.
 
-保持 Compose 的 `stop_grace_period` 大于 `SHUTDOWN_TIMEOUT` 至少 7 秒, 当前默认 30 秒. 停止时先断开 WARP, 再通知服务进程组退出并等待落盘, 仅对超时进程强制终止.
+保持 Compose 的 `stop_grace_period` 大于 `SHUTDOWN_TIMEOUT` 至少 7 秒, 当前默认 30 秒. 停止时通知各服务进程组退出, 由 WARP 后台任务执行断开和清理, 等待落盘并仅对超时进程强制终止.
 
 查看 `/usr/local/share/image-build/versions.txt` 获取实际安装版本, 查看 OCI 标签 `org.opencontainers.image.revision` 获取源码提交. 在 GitHub Actions 中手动触发工作流, 使用单个 `ubuntu-latest` runner 和 QEMU/Buildx 构建 amd64, arm64 镜像并发布 `oxzk/desktop:latest`. 工作流使用独立 GHA 缓存, 保留最近 2 次运行记录. 不将构建成功视为桌面或 WARP 运行验证通过.
