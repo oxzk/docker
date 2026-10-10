@@ -28,21 +28,54 @@ docker compose logs -f desktop
 
 ## WARP 客户端
 
-默认启用 Cloudflare WARP, 使用 `warp+doh` 模式处理容器的出站流量和 DNS. 保留 Compose 中的 `/dev/net/tun` 设备映射和 `NET_ADMIN` 能力, 并确保 Linux 宿主机存在该设备. 首次启用时由脚本使用 `--accept-tos` 注册客户端并连接, 将注册信息保存在 `./data/warp`.
+使用 `WARP_ENABLED` 选择 `off`, `proxy` 或 `tun`, 默认使用 `proxy`. 将旧配置中的 `false` 改为 `off`, `true` 改为 `tun`; 不再接受旧值. 首次启用时允许脚本使用 `--accept-tos` 注册客户端并连接, 将注册信息保存在 `./data/warp`.
+
+省略该变量以使用默认本地代理模式, 或在 `.env` 中显式设置:
+
+```dotenv
+WARP_ENABLED=proxy
+```
+
+使用默认 Compose, 无需配置 `devices` 和 `cap_add`; 从旧配置迁移时删除这两项, 然后重新创建容器. 使用容器内的 SOCKS5 或 HTTP CONNECT 代理 `127.0.0.1:40000`, 无需发布代理端口. 在需要使用 WARP 的应用中显式配置该代理; 对浏览器启用通过 SOCKS5 代理解析 DNS. 不要将代理模式视为全局流量接管, 未配置代理的应用和 Cloudflared 仍使用直连网络.
+
+在容器内验证代理出口:
+
+```bash
+curl --noproxy '' --proxy socks5h://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace
+```
+
+确认响应包含 `warp=on` 或 `warp=plus`. 启动检查和健康检查均使用该代理验证出口; 代理不可用时判定失败.
+
+需要通过全局隧道处理容器的出站流量和 DNS 时, 在 `.env` 中设置:
+
+```dotenv
+WARP_ENABLED=tun
+```
+
+确保 Docker 宿主机提供 `/dev/net/tun`, 并在 Compose 的 `services.desktop` 下添加:
+
+```yaml
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+```
+
+使用该模式启动 WARP 的 `warp+doh` 隧道. 使用下方 `docker run` 命令时, 为 `tun` 模式添加 `--cap-add NET_ADMIN --device /dev/net/tun:/dev/net/tun`.
 
 需要关闭 WARP 时, 在 `.env` 中设置:
 
 ```dotenv
-WARP_ENABLED=false
+WARP_ENABLED=off
 ```
 
-执行 `docker compose up -d desktop` 重新创建容器. 设为 `true` 或省略该变量以启用 WARP. 关闭时不启动 `warp-svc`, 不注册或连接 WARP, 保留已安装的 `warp-cli` 和注册数据. Cloudflared Tunnel 仍按原配置启动.
+修改模式后执行 `docker compose up -d desktop` 重新创建容器. 使用 `off` 跳过 `warp-svc` 启动, 注册和连接, 保留已安装的 `warp-cli` 和注册数据. 继续按原配置启动 Cloudflared Tunnel.
 
 等待日志出现 `WARP connected`, 该提示表示实际出口检查返回 `warp=on` 或 `warp=plus`. 连接失败时让容器明确报错退出, 不自动切换为直连. 需要查看状态时在部署机器执行 `docker compose exec desktop warp-cli --accept-tos status`.
 
 通过容器健康状态观察运行期连接. 健康检查每 30 秒检查 X 服务, GNOME Shell, WARP 客户端连接状态和真实出口; 关闭 WARP 时跳过客户端与外网检查. 连续失败 3 次后标记为 `unhealthy`, 启动宽限期为 300 秒. 不要将 `unhealthy` 视为自动重启: Compose 的 `restart: unless-stopped` 只处理容器退出. 健康检查不修改路由, 不提供阻止直连的网络规则, 也不会主动断开或重连 WARP.
 
-Compose 中的设备映射和网络能力不会随 `WARP_ENABLED` 自动移除. 若宿主机不提供 TUN 设备, 关闭 WARP 后同时移除服务的 `devices` 和 `cap_add` 配置.
+从 `tun` 切换到 `proxy` 或 `off` 时, 移除自行添加的 `devices` 和 `cap_add`; 不要依赖环境变量自动移除设备映射和网络能力.
 
 ## 单独构建和运行
 
@@ -52,7 +85,6 @@ Compose 中的设备映射和网络能力不会随 `WARP_ENABLED` 自动移除. 
 docker build -t oxzk/desktop:latest ./desktop
 docker run -d --name desktop --hostname vm --shm-size=2g \
   --stop-timeout 30 \
-  --cap-add NET_ADMIN --device /dev/net/tun:/dev/net/tun \
   -p 127.0.0.1:8444:8444 \
   --env-file ./desktop/.env \
   -v "$(pwd)/desktop/data/desktop:/home/admin" \
@@ -89,7 +121,7 @@ docker run -d --name desktop --hostname vm --shm-size=2g \
 | 配置 | 默认值 | 约束 |
 | --- | --- | --- |
 | `PASSWORD` | 必填 | 至少 6 个字符, 不包含换行 |
-| `WARP_ENABLED` | `true` | 仅接受 `true` 或 `false`, 控制 WARP 客户端启动和连接 |
+| `WARP_ENABLED` | `proxy` | 仅接受 `off`: 关闭; `proxy`: 本地 SOCKS5 / HTTP CONNECT 代理, 端口 40000; `tun`: 全局隧道 |
 | `SHUTDOWN_TIMEOUT` | `15` | 服务退出等待秒数, 允许 1..120; 容器停止宽限期须额外预留 WARP 断开时间 |
 | `CLOUDFLARED_TOKEN` | 空 | 为空时创建 Quick Tunnel |
 | `KASMVNC_WEBSOCKET_PORT` | `8444` | 修改时同时更新端口映射和受管 Tunnel 配置 |

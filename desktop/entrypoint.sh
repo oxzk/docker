@@ -21,10 +21,10 @@ require_number DESKTOP_WIDTH 8192
 require_number DESKTOP_HEIGHT 8192
 SHUTDOWN_TIMEOUT="${SHUTDOWN_TIMEOUT:-15}"
 require_number SHUTDOWN_TIMEOUT 120
-WARP_ENABLED="${WARP_ENABLED:-true}"
+WARP_ENABLED="${WARP_ENABLED:-proxy}"
 case "$WARP_ENABLED" in
-    true|false) ;;
-    *) printf 'Invalid WARP_ENABLED: expected true or false\n' >&2; exit 1 ;;
+    off|proxy|tun) ;;
+    *) printf 'Invalid WARP_ENABLED: expected off, proxy or tun\n' >&2; exit 1 ;;
 esac
 
 declare -a PIDS=()
@@ -105,14 +105,17 @@ warp_connected() {
 
 # 按开关初始化客户端, 复用持久化注册信息, 将守护进程纳入统一生命周期管理.
 start_warp() {
-    [[ "$WARP_ENABLED" == true ]] || return 0
-    if [[ ! -c /dev/net/tun ]]; then
-        printf 'WARP requires /dev/net/tun to be passed into the container\n' >&2
-        exit 1
-    fi
-    if ! capsh --has-p=cap_net_admin >/dev/null 2>&1; then
-        printf 'WARP requires the NET_ADMIN container capability\n' >&2
-        exit 1
+    [[ "$WARP_ENABLED" != off ]] || return 0
+    # 仅全局隧道模式需要内核设备和网络管理权限, 本地代理使用用户态连接.
+    if [[ "$WARP_ENABLED" == tun ]]; then
+        if [[ ! -c /dev/net/tun ]]; then
+            printf 'WARP requires /dev/net/tun to be passed into the container\n' >&2
+            exit 1
+        fi
+        if ! capsh --has-p=cap_net_admin >/dev/null 2>&1; then
+            printf 'WARP requires the NET_ADMIN container capability\n' >&2
+            exit 1
+        fi
     fi
     install -d -m 700 /var/lib/cloudflare-warp
     start_service warp warp-svc > /run/desktop/warp.log 2>&1
@@ -122,10 +125,18 @@ start_warp() {
     if [[ ! -s /var/lib/cloudflare-warp/reg.json ]]; then
         timeout 30 warp-cli --accept-tos registration new >/dev/null
     fi
-    timeout 10 warp-cli --accept-tos mode warp+doh >/dev/null
+    if [[ "$WARP_ENABLED" == proxy ]]; then
+        timeout 10 warp-cli --accept-tos mode proxy >/dev/null
+        timeout 10 warp-cli --accept-tos proxy port 40000 >/dev/null
+    else
+        timeout 10 warp-cli --accept-tos mode warp+doh >/dev/null
+    fi
     timeout 10 warp-cli --accept-tos connect >/dev/null
     wait_until warp-connection warp_connected
     printf 'WARP connected\n'
+    if [[ "$WARP_ENABLED" == proxy ]]; then
+        printf 'WARP SOCKS5 proxy: 127.0.0.1:40000 (configure applications to use it)\n'
+    fi
 }
 
 # 各次启动重新创建本容器的认证文件和套接字, 持久化目录只存用户数据.
