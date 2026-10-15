@@ -1,0 +1,9 @@
+[user]
+    name = riverecho520
+    email = riverecho520@gmail.com
+[pull]
+    rebase = false
+[init]
+    defaultBranch = main
+[credential]
+    helper = store --file=/root/.git/.git-credentials

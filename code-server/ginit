@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# 从当前工作区创建根提交, 推送成功后再更新本地 main 和索引.
+set -euo pipefail
+
+# 只清理本次创建的临时引用和临时索引, 不回滚或删除工作区文件.
+cleanup() {
+    local exit_code=$?
+    trap - EXIT
+    if [[ "${ref_created:-0}" == 1 ]]; then
+        git update-ref -d "$temporary_ref" "$commit" || true
+    fi
+    if [[ -n "${temporary_dir:-}" ]]; then
+        rm -rf "$temporary_dir"
+    fi
+    exit "$exit_code"
+}
+
+if [[ $# -gt 1 ]]; then
+    printf 'Usage: ginit [temporary-name]\n' >&2
+    exit 1
+fi
+if [[ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" != true ]]; then
+    printf 'ginit: not inside a Git worktree\n' >&2
+    exit 1
+fi
+cd "$(git rev-parse --show-toplevel)"
+repository_root="$PWD"
+temporary_ref="refs/ginit/${1:-new-branch}"
+git check-ref-format "$temporary_ref"
+
+# main 若被其他 worktree 使用, 不在远端推送成功后才发现本地无法切换.
+main_worktree="$(git worktree list --porcelain | awk '
+    /^worktree / { root = substr($0, 10) }
+    /^branch refs\/heads\/main$/ { print root }
+')"
+if [[ -n "$main_worktree" && "$main_worktree" != "$repository_root" ]]; then
+    printf 'ginit: main is checked out in another worktree\n' >&2
+    exit 1
+fi
+if [[ -n "$(git ls-files --unmerged)" ]]; then
+    printf 'ginit: resolve merge conflicts before rewriting main\n' >&2
+    exit 1
+fi
+
+# 对实际推送地址读取快照, 使用显式租约避免后台 fetch 改变保护依据.
+remote_url="$(git remote get-url --push origin)"
+remote_main="$(git ls-remote --refs "$remote_url" refs/heads/main)"
+expected_remote="${remote_main%%[[:space:]]*}"
+old_main="$(git rev-parse --verify refs/heads/main 2>/dev/null || true)"
+
+temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/ginit.XXXXXX")"
+ref_created=0
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# 用独立索引暂存当前文件, 推送失败时保留原分支, 原索引和未提交内容.
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    GIT_INDEX_FILE="$temporary_dir/index" git read-tree HEAD
+else
+    GIT_INDEX_FILE="$temporary_dir/index" git read-tree --empty
+fi
+GIT_INDEX_FILE="$temporary_dir/index" git add -A
+tree="$(GIT_INDEX_FILE="$temporary_dir/index" git write-tree)"
+commit="$(printf 'init\n' | git commit-tree "$tree")"
+git update-ref "$temporary_ref" "$commit" ''
+ref_created=1
+
+git push --force-with-lease="refs/heads/main:${expected_remote}" \
+    "$remote_url" "$temporary_ref:refs/heads/main"
+
+# 用原 main 的 SHA 作本地并发保护, 保留其他分支和工作区文件.
+if ! git update-ref refs/heads/main "$commit" "$old_main"; then
+    printf 'ginit: remote main updated to %s, but local main changed concurrently\n' "$commit" >&2
+    exit 1
+fi
+git symbolic-ref HEAD refs/heads/main
+git read-tree "$commit"
+printf 'main updated to %s\n' "$commit"

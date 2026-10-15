@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Warpscout SOCKS5 代理管理脚本.
+#
+# 用法: warpscout-proxy <start|stop|status>
+#
+# 验证代理出口 (容器内或经端口映射后):
+#   curl --socks5-hostname 127.0.0.1:40000 https://ifconfig.me
+#   curl --socks5-hostname 127.0.0.1:40000 -s https://ipinfo.io
+set -Eeuo pipefail
+
+readonly STATE_DIR="${WARPSCOUT_STATE_DIR:-${HOME}/.local/state/warpscout}"
+readonly ACCOUNT_FILE="${STATE_DIR}/account.json"
+readonly PID_FILE="${STATE_DIR}/proxy.pid"
+readonly LOG_FILE="${STATE_DIR}/proxy.log"
+readonly HOST=127.0.0.1
+readonly PORT=40000
+
+is_proxy_process() {
+    local pid="$1" args
+    [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null || return 1
+    args="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+    [[ "$args" == *'warpscout socks'* ]]
+}
+
+start_proxy() {
+    local endpoint pid
+    mkdir -p "$STATE_DIR"
+    chmod 0700 "$STATE_DIR"
+    if [[ -s "$PID_FILE" ]] && is_proxy_process "$(<"$PID_FILE")"; then
+        printf 'Warpscout proxy already running at socks5h://%s:%s\n' "$HOST" "$PORT"
+        return 0
+    fi
+    rm -f "$PID_FILE"
+    [[ -s "$ACCOUNT_FILE" ]] || warpscout register -a "$ACCOUNT_FILE"
+    chmod 0600 "$ACCOUNT_FILE"
+    endpoint="$(warpscout scan -a "$ACCOUNT_FILE" -p awg -P -country "${WARPSCOUT_COUNTRY:-US}" -best)"
+    [[ -n "$endpoint" ]] || { printf 'No Warpscout endpoint available\n' >&2; return 1; }
+    nohup warpscout socks -a "$ACCOUNT_FILE" -p awg -e "$endpoint" -l "$HOST" -P "$PORT" \
+        </dev/null >>"$LOG_FILE" 2>&1 &
+    pid="$!"
+    printf '%s\n' "$pid" > "$PID_FILE"
+}
+
+stop_proxy() {
+    local pid
+    [[ -s "$PID_FILE" ]] || return 0
+    pid="$(<"$PID_FILE")"
+    if is_proxy_process "$pid"; then kill "$pid"; fi
+    rm -f "$PID_FILE"
+}
+
+status_proxy() {
+    local pid
+    if [[ -s "$PID_FILE" ]] && is_proxy_process "$(<"$PID_FILE")"; then
+        pid="$(<"$PID_FILE")"
+        printf 'Warpscout proxy running at socks5h://%s:%s (pid=%s)\n' "$HOST" "$PORT" "$pid"
+        printf 'Verify: curl -x socks5h://%s:%s https://ifconfig.me\n' "$HOST" "$PORT"
+        return 0
+    fi
+    printf 'Warpscout proxy is not running\n' >&2
+    return 1
+}
+
+main() {
+    case "${1:-}" in
+        start) start_proxy ;;
+        stop) stop_proxy ;;
+        status) status_proxy ;;
+        *) printf 'Usage: %s <start|stop|status>\n' "$0" >&2; return 2 ;;
+    esac
+}
+
+main "$@"

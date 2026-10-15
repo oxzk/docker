@@ -1,0 +1,19 @@
+# 使用镜像统一提供的语言工具路径, 只配置交互式终端行为.
+export SHELL=/bin/zsh
+export ZSH=/root/.oh-my-zsh
+export ZSH_CUSTOM="$ZSH/custom"
+ZSH_THEME=dracula
+
+# 镜像内的插件版本固定且已移除 Git 元数据, 更新时重新构建镜像.
+zstyle ':omz:update' mode disabled
+plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
+typeset -U path PATH
+
+source "$NVM_DIR/nvm.sh"
+source "$ZSH/oh-my-zsh.sh"
+
+alias ll='ls -lah'
+alias vi=vim
+alias gs='git status'
+alias gc='git commit -m'
+alias guc='git commit -am'
