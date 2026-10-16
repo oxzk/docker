@@ -95,6 +95,12 @@ configure_user_shell() {
     chown "$USER:$USER" "${APP_HOME}/.bashrc"
 }
 
+configure_locale() {
+    printf '%s\n' 'zh_CN.UTF-8 UTF-8' 'en_US.UTF-8 UTF-8' > /etc/locale.gen
+    locale-gen zh_CN.UTF-8 en_US.UTF-8
+    update-locale LANG=zh_CN.UTF-8 LANGUAGE=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8
+}
+
 cleanup_build_files() {
     apt-get clean
     rm -rf /var/lib/apt/lists/* /tmp/kasmvnc.deb /tmp/warpscout.tar.gz \
@@ -112,7 +118,7 @@ main() {
     install_browser_tool
     install_python_environment
     configure_user_shell
-    locale-gen en_US.UTF-8
+    configure_locale
     cleanup_build_files
 }
 

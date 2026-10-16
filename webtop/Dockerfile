@@ -23,6 +23,11 @@ COPY install.sh /tmp/webtop-install.sh
 COPY main.py /tmp/main.py
 RUN chmod +x /tmp/webtop-install.sh && /tmp/webtop-install.sh
 
+# locale 生成完成后再设置默认值, 避免构建阶段出现 locale 缺失警告.
+ENV LANG=zh_CN.UTF-8 \
+    LANGUAGE=zh_CN.UTF-8 \
+    LC_ALL=zh_CN.UTF-8
+
 COPY entrypoint.sh /usr/local/bin/webtop-entrypoint
 COPY warpscout-proxy /usr/local/bin/warpscout-proxy
 RUN chmod 0755 /usr/local/bin/webtop-entrypoint /usr/local/bin/warpscout-proxy

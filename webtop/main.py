@@ -264,6 +264,20 @@ class BrowserApp:
         """返回 Kryva 使用的 NFC 规范化 profile 归档文件名。"""
         return f"{unicodedata.normalize('NFC', profile)}.tar.gz"
 
+    @staticmethod
+    def format_size(size: int) -> str:
+        """将字节数格式化为易读的 B/KB/MB/GB 文本。"""
+        value = float(size)
+        unit = "B"
+        for candidate in ("KB", "MB", "GB"):
+            if value < 1024:
+                break
+            value /= 1024
+            unit = candidate
+        if unit == "B":
+            return f"{size} B"
+        return f"{value:.1f} {unit}"
+
     @classmethod
     def build_parser(cls) -> argparse.ArgumentParser:
         """创建包含 start、backup 和 restore 的参数解析器。"""
@@ -291,6 +305,11 @@ class BrowserApp:
 
         backup_parser = commands.add_parser("backup", help="备份浏览器 profile")
         backup_parser.add_argument("--profile", required=True, metavar="NAME")
+        backup_parser.add_argument(
+            "--no-upload",
+            action="store_true",
+            help="仅生成备份文件到 backups 目录, 不上传 Kryva, 输出路径和大小",
+        )
 
         restore_parser = commands.add_parser("restore", help="恢复浏览器 profile")
         restore_parser.add_argument("--profile", required=True, metavar="NAME")
@@ -339,16 +358,33 @@ class BrowserApp:
             print(f"已打开: {page.url} | {await page.title()}")
             await self.wait_for_exit()
 
-    def backup(self, profile: str) -> int:
-        """创建并上传指定 profile 的站点数据归档。"""
+    def create_archive(self, profile: str, archive: Path) -> bool:
+        """创建归档; 没有站点数据时输出提示并返回 False。"""
+        if self.archives.create(profile, archive):
+            return True
+        print(
+            f"profile={profile} 没有 Cookies, localStorage 或 IndexedDB 数据, 跳过备份"
+        )
+        return False
+
+    def backup(self, profile: str, upload: bool = True) -> int:
+        """创建指定 profile 的站点数据归档, 按需上传 Kryva。"""
+        if not upload:
+            backup_dir = self.data_dir.parent / "backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            archive = backup_dir / self.profile_archive_name(profile)
+            if not self.create_archive(profile, archive):
+                return 0
+            print(
+                f"已备份(未上传): path={archive.resolve()}, "
+                f"size={self.format_size(archive.stat().st_size)}"
+            )
+            return 0
         with tempfile.TemporaryDirectory(
             prefix="webtop-backup-"
         ) as temporary_dir:
             archive = Path(temporary_dir) / self.profile_archive_name(profile)
-            if not self.archives.create(profile, archive):
-                print(
-                    f"profile={profile} 没有 Cookies, localStorage 或 IndexedDB 数据, 跳过备份"
-                )
+            if not self.create_archive(profile, archive):
                 return 0
             KryvaClient.from_environment().upload(profile, archive)
         print(
@@ -379,7 +415,7 @@ class BrowserApp:
                 asyncio.run(self.open_url(args.url, args.profile, args.proxy))
                 return 0
             if args.command == "backup":
-                return self.backup(args.profile)
+                return self.backup(args.profile, upload=not args.no_upload)
             return self.restore(args.profile)
         except (
             OSError,
