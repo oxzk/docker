@@ -23,7 +23,7 @@ Item = TypeVar("Item")
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 KRYVA_DEFAULT_API_URL = "https://kryva.oozuo.com/"
-KRYVA_PLATFORM = "remote-desktop"
+KRYVA_PLATFORM = "profile"
 KRYVA_TIMEOUT = (15, 600)
 PROFILE_ARCHIVE_SUFFIX = ".tar.gz"
 SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
