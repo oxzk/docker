@@ -12,30 +12,39 @@ import sys
 import tarfile
 import tempfile
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path, PurePosixPath
+from typing import TypeVar
 from urllib.parse import unquote, urlsplit
 
 import requests
+
+Item = TypeVar("Item")
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 KRYVA_DEFAULT_API_URL = "https://kryva.oozuo.com/"
 KRYVA_PLATFORM = "remote-desktop"
 KRYVA_TIMEOUT = (15, 600)
+PROFILE_ARCHIVE_SUFFIX = ".tar.gz"
+SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
+ARCHIVE_ERRORS = (OSError, RuntimeError, requests.RequestException, tarfile.TarError)
+
+
+def profile_archive_name(profile: str) -> str:
+    """返回 Kryva 与本地共用的 NFC 规范化 profile 归档文件名。"""
+    return f"{unicodedata.normalize('NFC', profile)}{PROFILE_ARCHIVE_SUFFIX}"
 
 
 class ProfileArchive:
     """筛选、打包并恢复浏览器 profile 中的站点数据。"""
 
-    SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
     PROFILE_DATABASES = {
         f"{name}{suffix}"
         for name in ("cookies.sqlite", "webappsstore.sqlite", "storage.sqlite")
-        for suffix in ("", "-wal", "-shm", "-journal")
+        for suffix in SQLITE_SUFFIXES
     }
     LS_ARCHIVE_FILES = {
-        f"storage/ls-archive.sqlite{suffix}"
-        for suffix in ("", "-wal", "-shm", "-journal")
+        f"storage/ls-archive.sqlite{suffix}" for suffix in SQLITE_SUFFIXES
     }
 
     def __init__(self, data_dir: Path) -> None:
@@ -218,7 +227,7 @@ class KryvaClient:
 
     def upload(self, profile: str, archive: Path) -> None:
         """使用固定 platform 和 profile 文件名上传归档。"""
-        filename = BrowserApp.profile_archive_name(profile)
+        filename = profile_archive_name(profile)
         with archive.open("rb") as stream:
             response = self.session.post(
                 self.endpoint("/api/v1/files/upload"),
@@ -236,7 +245,7 @@ class KryvaClient:
             headers={"Authorization": f"Bearer {self.api_key}"},
             params={
                 "platform": KRYVA_PLATFORM,
-                "filename": BrowserApp.profile_archive_name(profile),
+                "filename": profile_archive_name(profile),
             },
             timeout=KRYVA_TIMEOUT,
             stream=True,
@@ -261,11 +270,6 @@ class BrowserApp:
         self.archives = ProfileArchive(data_dir)
 
     @staticmethod
-    def profile_archive_name(profile: str) -> str:
-        """返回 Kryva 使用的 NFC 规范化 profile 归档文件名。"""
-        return f"{unicodedata.normalize('NFC', profile)}.tar.gz"
-
-    @staticmethod
     def format_size(size: int) -> str:
         """将字节数格式化为易读的 B/KB/MB/GB 文本。"""
         value = float(size)
@@ -278,6 +282,60 @@ class BrowserApp:
         if unit == "B":
             return f"{size} B"
         return f"{value:.1f} {unit}"
+
+    def local_archive(self, profile: str) -> Path:
+        """返回 data 目录下 profile 的本地压缩包路径。"""
+        return self.data_dir / profile_archive_name(profile)
+
+    def profile_directories(self) -> list[str]:
+        """返回 data 目录下可备份的 profile 目录名。"""
+        if not self.data_dir.is_dir():
+            return []
+        return sorted(
+            entry.name
+            for entry in self.data_dir.iterdir()
+            if entry.is_dir() and not entry.is_symlink()
+        )
+
+    def profile_names(self) -> list[str]:
+        """返回 data 目录下所有已知 profile 名, 含目录与本地压缩包。"""
+        if not self.data_dir.is_dir():
+            return []
+        names: set[str] = set()
+        for entry in self.data_dir.iterdir():
+            if entry.is_symlink():
+                continue
+            if entry.is_dir():
+                names.add(entry.name)
+            elif entry.is_file() and entry.name.endswith(PROFILE_ARCHIVE_SUFFIX):
+                names.add(entry.name[: -len(PROFILE_ARCHIVE_SUFFIX)])
+        return sorted(names)
+
+    @staticmethod
+    def select_profile(
+        profiles: Sequence[str],
+        action: str,
+        describe: Callable[[str], str] | None = None,
+    ) -> str | None:
+        """列出 profile 供用户输入序号选择; 输入 q 或 EOF 时返回 None。"""
+        if not profiles:
+            print(f"data 目录下没有可{action}的 profile")
+            return None
+        for index, name in enumerate(profiles, start=1):
+            note = describe(name) if describe else ""
+            print(f"{index}. {name}{note}")
+        while True:
+            try:
+                choice = input(f"请选择要{action}的 profile 序号, 输入 q 取消: ")
+            except EOFError:
+                print()
+                return None
+            choice = choice.strip()
+            if choice.lower() == "q":
+                return None
+            if choice.isdigit() and 1 <= int(choice) <= len(profiles):
+                return profiles[int(choice) - 1]
+            print("序号无效, 请重新输入")
 
     @classmethod
     def build_parser(cls) -> argparse.ArgumentParser:
@@ -306,19 +364,39 @@ class BrowserApp:
         start_parser.add_argument(
             "--locale",
             default="en-US",
-            help="浏览器 locale, 默认 us, 也可用 en-US 或逗号分隔的列表",
+            help="浏览器 locale, 默认 en-US, 也可用 us 或逗号分隔的列表",
         )
 
         backup_parser = commands.add_parser("backup", help="备份浏览器 profile")
-        backup_parser.add_argument("--profile", required=True, metavar="NAME")
+        backup_target = backup_parser.add_mutually_exclusive_group()
+        backup_target.add_argument(
+            "--profile",
+            metavar="NAME",
+            help="指定 profile; 省略此选项与 --all 时列出所有 profile 供选择",
+        )
+        backup_target.add_argument(
+            "--all",
+            action="store_true",
+            help="备份 data 目录下的所有 profile",
+        )
         backup_parser.add_argument(
             "--no-upload",
             action="store_true",
-            help="仅生成备份文件到 backups 目录, 不上传 Kryva, 输出路径和大小",
+            help="备份文件不上传 Kryva, 压缩包始终保留在 data 目录",
         )
 
         restore_parser = commands.add_parser("restore", help="恢复浏览器 profile")
-        restore_parser.add_argument("--profile", required=True, metavar="NAME")
+        restore_target = restore_parser.add_mutually_exclusive_group()
+        restore_target.add_argument(
+            "--profile",
+            metavar="NAME",
+            help="指定 profile; 省略此选项与 --all 时列出所有 profile 供选择",
+        )
+        restore_target.add_argument(
+            "--all",
+            action="store_true",
+            help="恢复 data 目录下所有本地压缩包",
+        )
         return parser
 
     @staticmethod
@@ -357,7 +435,7 @@ class BrowserApp:
         url: str,
         profile: str | None = None,
         proxy: str | None = None,
-        locale: str = "us",
+        locale: str = "en-US",
     ) -> None:
         """启动可见浏览器, 并按需使用持久化上下文、指定代理和 locale。"""
         from camoufox.async_api import AsyncCamoufox
@@ -399,44 +477,91 @@ class BrowserApp:
         return False
 
     def backup(self, profile: str, upload: bool = True) -> int:
-        """创建指定 profile 的站点数据归档, 按需上传 Kryva。"""
-        if not upload:
-            backup_dir = self.data_dir.parent / "backups"
-            backup_dir.mkdir(parents=True, exist_ok=True)
-            archive = backup_dir / self.profile_archive_name(profile)
-            if not self.create_archive(profile, archive):
-                return 0
+        """创建指定 profile 的站点数据归档, 按需上传 Kryva, 成功后删除 profile 目录。"""
+        archive = self.local_archive(profile)
+        if not self.create_archive(profile, archive):
+            return 0
+        if upload:
+            KryvaClient.from_environment().upload(profile, archive)
+            print(
+                f"已备份: platform={KRYVA_PLATFORM}, "
+                f"filename={archive.name}, path={archive.resolve()}"
+            )
+        else:
             print(
                 f"已备份(未上传): path={archive.resolve()}, "
                 f"size={self.format_size(archive.stat().st_size)}"
             )
-            return 0
-        with tempfile.TemporaryDirectory(
-            prefix="webtop-backup-"
-        ) as temporary_dir:
-            archive = Path(temporary_dir) / self.profile_archive_name(profile)
-            if not self.create_archive(profile, archive):
-                return 0
-            KryvaClient.from_environment().upload(profile, archive)
-        print(
-            f"已备份: platform={KRYVA_PLATFORM}, filename={self.profile_archive_name(profile)}"
-        )
+        profile_dir = self.archives.profile_path(profile)
+        shutil.rmtree(profile_dir)
+        print(f"已删除 profile 目录: {profile_dir}")
         return 0
 
+    def run_each(
+        self,
+        items: Sequence[Item],
+        action: str,
+        operation: Callable[[Item], int | None],
+    ) -> int:
+        """逐个执行操作, 单个失败输出 stderr 但不中断, 返回是否全部成功。"""
+        failed = 0
+        for item in items:
+            try:
+                if operation(item):
+                    failed += 1
+            except ARCHIVE_ERRORS as error:
+                print(f"{action} {item} 失败: {error}", file=sys.stderr)
+                failed += 1
+        return 1 if failed else 0
+
+    def backup_all(self, upload: bool = True) -> int:
+        """备份 data 目录下所有 profile 目录, 单个失败不中断其余备份。"""
+        profiles = self.profile_directories()
+        if not profiles:
+            print(f"data 目录下没有 profile: {self.data_dir}")
+            return 0
+        return self.run_each(
+            profiles, "备份", lambda profile: self.backup(profile, upload=upload)
+        )
+
+    def restore_local(self, profile: str, archive: Path) -> None:
+        """从本地压缩包恢复 profile 并输出结果。"""
+        self.archives.extract(profile, archive)
+        print(f"已恢复(本地): path={archive.resolve()}, filename={archive.name}")
+
     def restore(self, profile: str) -> int:
-        """从 Kryva 下载并恢复指定 profile 的站点数据。"""
+        """优先从本地 data 目录恢复, 否则从 Kryva 下载归档再恢复。"""
+        archive = self.local_archive(profile)
+        if archive.is_file():
+            self.restore_local(profile, archive)
+            return 0
         with tempfile.TemporaryDirectory(
             prefix="webtop-restore-"
         ) as temporary_dir:
-            archive = Path(temporary_dir) / self.profile_archive_name(profile)
-            if not KryvaClient.from_environment().download(profile, archive):
+            downloaded = Path(temporary_dir) / archive.name
+            if not KryvaClient.from_environment().download(profile, downloaded):
                 print(f"profile={profile} 暂无可恢复的 Kryva 备份")
                 return 0
-            self.archives.extract(profile, archive)
-        print(
-            f"已恢复: platform={KRYVA_PLATFORM}, filename={self.profile_archive_name(profile)}"
-        )
+            self.archives.extract(profile, downloaded)
+        print(f"已恢复: platform={KRYVA_PLATFORM}, filename={archive.name}")
         return 0
+
+    def restore_archive(self, archive: Path) -> None:
+        """恢复单个本地压缩包, 不回退 Kryva。"""
+        profile = archive.name[: -len(PROFILE_ARCHIVE_SUFFIX)]
+        self.restore_local(profile, archive)
+
+    def restore_all(self) -> int:
+        """恢复 data 目录下所有本地压缩包, 单个失败不中断其余恢复。"""
+        archives = (
+            sorted(self.data_dir.glob(f"*{PROFILE_ARCHIVE_SUFFIX}"))
+            if self.data_dir.is_dir()
+            else []
+        )
+        if not archives:
+            print(f"data 目录下没有本地压缩包: {self.data_dir}")
+            return 0
+        return self.run_each(archives, "恢复", self.restore_archive)
 
     def run(self, argv: Sequence[str] | None = None) -> int:
         """解析命令并执行对应操作。"""
@@ -448,21 +573,49 @@ class BrowserApp:
                 )
                 return 0
             if args.command == "backup":
-                return self.backup(args.profile, upload=not args.no_upload)
-            return self.restore(args.profile)
-        except (
-            OSError,
-            RuntimeError,
-            requests.RequestException,
-            tarfile.TarError,
-        ) as error:
+                return self.run_backup(args)
+            return self.run_restore(args)
+        except ARCHIVE_ERRORS as error:
             print(str(error), file=sys.stderr)
             return 1
+
+    def run_backup(self, args: argparse.Namespace) -> int:
+        """按 --all、--profile 或交互选择执行备份。"""
+        upload = not args.no_upload
+        if args.all:
+            return self.backup_all(upload=upload)
+        profile = args.profile or self.select_profile(
+            self.profile_directories(), "备份"
+        )
+        if profile is None:
+            return 0
+        return self.backup(profile, upload=upload)
+
+    def run_restore(self, args: argparse.Namespace) -> int:
+        """按 --all、--profile 或交互选择执行恢复。"""
+        if args.all:
+            return self.restore_all()
+        profile = args.profile or self.select_profile(
+            self.profile_names(), "恢复", describe=self.describe_restore_source
+        )
+        if profile is None:
+            return 0
+        return self.restore(profile)
+
+    def describe_restore_source(self, profile: str) -> str:
+        """标注交互列表中 profile 的恢复来源。"""
+        if self.local_archive(profile).is_file():
+            return " (本地压缩包)"
+        return " (尝试 Kryva)"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """创建应用并运行命令行入口。"""
-    return BrowserApp().run(argv)
+    try:
+        return BrowserApp().run(argv)
+    except KeyboardInterrupt:
+        print()
+        return 130
 
 
 if __name__ == "__main__":

@@ -109,9 +109,6 @@ main() {
     wait_for_x_server
     start_desktop
     start_cloudflared
-    # Warpscout 不可用时仅告警, 不阻断桌面启动.
-    # warpscout-proxy start \
-    #     || printf 'Warning: Warpscout proxy failed to start, desktop continues without proxy\n' >&2
     if (( USE_QUICK_TUNNEL != 0 )); then
         print_quick_tunnel_url
     fi
