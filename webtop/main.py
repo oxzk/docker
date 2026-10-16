@@ -14,6 +14,7 @@ import tempfile
 import unicodedata
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urlsplit
 
 import requests
 
@@ -300,7 +301,12 @@ class BrowserApp:
         start_parser.add_argument(
             "--proxy",
             metavar="SERVER|null",
-            help="代理地址, 如 socks5://127.0.0.1:40000; 传 null 则不使用代理",
+            help="代理地址, 如 socks5://user:pass@127.0.0.1:40000; 传 null 则不使用代理",
+        )
+        start_parser.add_argument(
+            "--locale",
+            default="en-US",
+            help="浏览器 locale, 默认 us, 也可用 en-US 或逗号分隔的列表",
         )
 
         backup_parser = commands.add_parser("backup", help="备份浏览器 profile")
@@ -326,20 +332,45 @@ class BrowserApp:
             if command.strip().lower() == "exit":
                 return
 
+    @staticmethod
+    def parse_proxy(proxy: str) -> dict[str, str]:
+        """解析代理地址; 含用户名或密码时拆分为独立字段。"""
+        parsed = urlsplit(proxy)
+        if not parsed.scheme or not parsed.hostname:
+            return {"server": proxy}
+        try:
+            port = parsed.port
+        except ValueError as error:
+            raise RuntimeError(f"代理端口无效: {proxy}") from error
+        server = f"{parsed.scheme}://{parsed.hostname}"
+        if port is not None:
+            server = f"{server}:{port}"
+        options = {"server": server}
+        if parsed.username is not None:
+            options["username"] = unquote(parsed.username)
+        if parsed.password is not None:
+            options["password"] = unquote(parsed.password)
+        return options
+
     async def open_url(
         self,
         url: str,
         profile: str | None = None,
         proxy: str | None = None,
+        locale: str = "us",
     ) -> None:
-        """启动可见浏览器, 并按需使用持久化上下文和指定代理。"""
+        """启动可见浏览器, 并按需使用持久化上下文、指定代理和 locale。"""
         from camoufox.async_api import AsyncCamoufox
 
-        options: dict[str, object] = {"headless": False, "geoip": True}
+        options: dict[str, object] = {
+            "headless": False,
+            "geoip": True,
+            "locale": locale,
+        }
         if proxy == "null":
             pass
         elif proxy:
-            options["proxy"] = {"server": proxy}
+            options["proxy"] = self.parse_proxy(proxy)
         else:
             options["firefox_user_prefs"] = {
                 "network.proxy.type": 1,
@@ -412,7 +443,9 @@ class BrowserApp:
         args = self.build_parser().parse_args(argv)
         try:
             if args.command == "start":
-                asyncio.run(self.open_url(args.url, args.profile, args.proxy))
+                asyncio.run(
+                    self.open_url(args.url, args.profile, args.proxy, args.locale)
+                )
                 return 0
             if args.command == "backup":
                 return self.backup(args.profile, upload=not args.no_upload)
