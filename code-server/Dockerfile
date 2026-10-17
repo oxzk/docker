@@ -23,11 +23,10 @@ ARG TARGETARCH
 ARG GO_VERSION=1.24.3
 ARG PYTHON_VERSION=3.12
 ARG NVM_VERSION=v0.40.3
+ARG NODE_VERSION=22
 ENV GOPATH=/root/.local/share/go \
     NVM_DIR=/root/.nvm \
-    PNPM_HOME=/root/.local/share/pnpm \
-    PNPM_GLOBAL_BIN_DIR=/root/.local/share/pnpm/bin \
-    PATH="/root/.local/bin:/usr/local/go/bin:/root/.local/share/go/bin:/root/.local/share/pnpm/bin:/root/.local/share/pnpm:${PATH}"
+    PATH="/root/.local/bin:/usr/local/go/bin:/root/.local/share/go/bin:${PATH}"
 
 # 一次执行安装脚本, 安装全部工具链.
 RUN --mount=type=bind,source=install.sh,target=/build/install.sh \
@@ -40,7 +39,7 @@ COPY entrypoint.sh /entrypoint.sh
 RUN set -eu; \
     chmod 755 /entrypoint.sh; \
     mkdir -p /workspace; \
-    for name in PATH GOPATH NVM_DIR PNPM_HOME PNPM_GLOBAL_BIN_DIR; do \
+    for name in PATH GOPATH NVM_DIR; do \
         printf '%s="%s"\n' "$name" "${!name}"; \
     done >> /etc/environment
 

@@ -115,30 +115,27 @@ run_installer() {
     rm -f "$installer"
 }
 
-# 安装 nvm 与当前 Node, 再用随 Node 提供的 corepack 激活最新 pnpm 和全局包.
+# 安装 nvm 与指定 Node, 再用 npm 安装全局包.
 install_node() {
     local node_bin name
-    require_versions NVM_VERSION
-    log 'Installing Node and global packages'
-    mkdir -p "$NVM_DIR" "$PNPM_HOME" "$PNPM_GLOBAL_BIN_DIR"
+    require_versions NVM_VERSION NODE_VERSION
+    log "Installing Node $NODE_VERSION and global packages"
+    mkdir -p "$NVM_DIR"
     PROFILE=/dev/null run_installer \
         "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" bash
     # shellcheck disable=SC1091
     source "$NVM_DIR/nvm.sh"
-    nvm install node
-    nvm alias default node
+    nvm install "$NODE_VERSION"
+    nvm alias default "$NODE_VERSION"
     node_bin="$(dirname "$(nvm which current)")"
-    # 版本目录不进入镜像 PATH, 把当前 Node 命令链接到系统路径.
-    for name in node npm npx corepack; do
-        ln -sfn "$node_bin/$name" "/usr/local/bin/$name"
+    export PATH="${node_bin}:${PATH}"
+    npm install --global @openai/codex wrangler
+    # 版本目录不进入镜像 PATH, 只链接实际存在的命令.
+    for name in node npm npx codex wrangler; do
+        if [[ -x "${node_bin}/${name}" ]]; then
+            ln -sfn "${node_bin}/${name}" "/usr/local/bin/${name}"
+        fi
     done
-    corepack enable
-    corepack prepare pnpm@latest --activate
-    if [[ -e "$node_bin/pnpm" ]]; then
-        ln -sfn "$node_bin/pnpm" /usr/local/bin/pnpm
-    fi
-    pnpm config set global-bin-dir "$PNPM_GLOBAL_BIN_DIR"
-    pnpm add -g @openai/codex wrangler
 }
 
 # 安装固定的 code-server 扩展. 每项是 publisher.name, 可追加 @version.
@@ -234,20 +231,16 @@ print_tool_versions() {
     print_version rclone rclone version
     print_version node node --version
     print_version npm npm --version
-    print_version pnpm pnpm --version
     print_version codex codex --version
     print_version wrangler wrangler --version
     print_version code-server code-server --version
 }
 
-# 清理构建缓存. 只 prune pnpm store, 不删除全局包依赖的硬链接内容.
+# 清理构建缓存, 不删除已安装的工具本体.
 cleanup_image() {
     log 'Removing download caches'
     if command -v npm >/dev/null 2>&1; then
         npm cache clean --force >/dev/null 2>&1 || true
-    fi
-    if command -v pnpm >/dev/null 2>&1; then
-        pnpm store prune >/dev/null 2>&1 || true
     fi
     if command -v go >/dev/null 2>&1; then
         go clean -cache -modcache -testcache >/dev/null 2>&1 || true
