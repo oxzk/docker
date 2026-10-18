@@ -354,7 +354,7 @@ class BrowserApp:
         start_parser.add_argument(
             "--profile",
             metavar="NAME",
-            help="将数据持久化到 ./data/NAME",
+            help="将数据持久化到 ./data/NAME; 省略时列出所有 profile 供选择, 输入 q 则不使用 profile",
         )
         start_parser.add_argument(
             "--proxy",
@@ -568,16 +568,23 @@ class BrowserApp:
         args = self.build_parser().parse_args(argv)
         try:
             if args.command == "start":
-                asyncio.run(
-                    self.open_url(args.url, args.profile, args.proxy, args.locale)
-                )
-                return 0
+                return self.run_start(args)
             if args.command == "backup":
                 return self.run_backup(args)
             return self.run_restore(args)
         except ARCHIVE_ERRORS as error:
             print(str(error), file=sys.stderr)
             return 1
+
+    def run_start(self, args: argparse.Namespace) -> int:
+        """按 --profile 或交互选择启动浏览器; 未选择时不使用 profile。"""
+        profile = args.profile
+        if profile is None:
+            profile = self.select_profile(self.profile_directories(), "启动")
+            if profile is None:
+                print("未选择 profile, 本次启动不持久化数据")
+        asyncio.run(self.open_url(args.url, profile, args.proxy, args.locale))
+        return 0
 
     def run_backup(self, args: argparse.Namespace) -> int:
         """按 --all、--profile 或交互选择执行备份。"""
