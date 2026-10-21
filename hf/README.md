@@ -2,13 +2,13 @@
 
 - 构建镜像: `docker build -t oxzk/hf ./hf`.
 - 使用 `PASSWORD` 设置 root SSH 密码, 默认值为 `admin`.
-- 在 `FRPC_CONFIG` 和 `FRPC_CONFIG_BASE64` 中必须且只能设置一个.
+- `FRPC_CONFIG` 和 `FRPC_CONFIG_BASE64` 均为可选项, 同时只能设置一个; 都不设置时不启动 frpc, 仅启动 SSH 与 FastAPI.
 - 将 `FRPC_CONFIG` 设置为容器内配置文件路径或 HTTP(S) 配置文件地址.
 - 将 `FRPC_CONFIG_BASE64` 设置为完整 TOML 配置的标准 Base64 字符串.
 - 对 HTTP(S) 地址使用 TOML 配置. 配置下载失败, 解码失败或校验失败时停止启动.
-- 通过 `docker logs` 查看 frpc 日志. 任一受监管进程退出时停止容器.
+- 启用 frpc 时通过 `docker logs` 查看日志. 任一受监管进程退出时停止容器.
 
-将以下配置保存为 `frpc.toml`, 并替换服务端地址, 端口及认证 token. 在 frps 端允许远程端口 `6000`.
+将以下配置保存为 `frpc.toml`, 并替换服务端地址, 端口及认证 token. 在 frps 端允许远程端口 `6000`. 不启用 frpc 时无需创建该文件.
 
 ```toml
 serverAddr = "frps.example.com"
@@ -22,6 +22,14 @@ type = "tcp"
 localIP = "127.0.0.1"
 localPort = 22
 remotePort = 6000
+```
+
+不使用 frpc 启动(仅 SSH 与 FastAPI):
+
+```bash
+docker run --rm -p 7860:7860 -p 2222:22 \
+    -e PASSWORD='replace-with-your-password' \
+    oxzk/hf
 ```
 
 使用本地文件启动:
@@ -52,6 +60,6 @@ docker run --rm -p 7860:7860 \
     oxzk/hf
 ```
 
-在 Hugging Face Space 的 Secrets 中设置 `PASSWORD` 和选定的配置变量, 使用 Base64 时粘贴编码结果.
+在 Hugging Face Space 的 Secrets 中设置 `PASSWORD`; 如需 frpc 隧道, 再按上述方式设置选定的配置变量, 使用 Base64 时粘贴编码结果.
 
 通过 `ssh -p 6000 root@frps.example.com` 连接 SSH. 通过容器端口 `7860` 访问 FastAPI.

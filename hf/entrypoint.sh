@@ -23,8 +23,8 @@ fail() {
 cleanup() {
     local status=$? pid
     trap - EXIT
-    for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
-    for pid in "${PIDS[@]}"; do wait "$pid" 2>/dev/null || true; done
+    for pid in ${PIDS[@]+"${PIDS[@]}"}; do kill "$pid" 2>/dev/null || true; done
+    for pid in ${PIDS[@]+"${PIDS[@]}"}; do wait "$pid" 2>/dev/null || true; done
     if [[ -n "${FRPC_CONFIG_DIR}" ]]; then
         rm -rf "${FRPC_CONFIG_DIR}"
     fi
@@ -45,13 +45,14 @@ start_ssh_server() {
     PIDS+=("$!")
 }
 
-# 解析唯一配置来源，并在启动服务前校验配置。
+# 解析唯一配置来源，并在启动服务前校验配置；未配置 frpc 时返回非零值。
 configure_frpc() {
     if [[ -n "${FRPC_CONFIG:-}" && -n "${FRPC_CONFIG_BASE64:-}" ]]; then
         fail "FRPC_CONFIG 与 FRPC_CONFIG_BASE64 只能设置一个"
     fi
     if [[ -z "${FRPC_CONFIG:-}" && -z "${FRPC_CONFIG_BASE64:-}" ]]; then
-        fail "必须设置 FRPC_CONFIG 或 FRPC_CONFIG_BASE64"
+        log "未设置 FRPC_CONFIG 或 FRPC_CONFIG_BASE64，跳过 frpc 隧道"
+        return 1
     fi
 
     if [[ -n "${FRPC_CONFIG_BASE64:-}" || "${FRPC_CONFIG:-}" == http://* || "${FRPC_CONFIG:-}" == https://* ]]; then
@@ -108,11 +109,16 @@ main() {
     trap 'exit 143' TERM
     trap 'exit 130' INT
 
-    configure_frpc
+    local frpc_enabled=0
+    if configure_frpc; then
+        frpc_enabled=1
+    fi
     configure_root_password
     start_ssh_server
     start_fastapi_server
-    start_frpc
+    if ((frpc_enabled)); then
+        start_frpc
+    fi
     wait_for_processes
 }
 
