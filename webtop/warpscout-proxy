@@ -14,6 +14,7 @@ readonly PID_FILE="${STATE_DIR}/proxy.pid"
 readonly LOG_FILE="${STATE_DIR}/proxy.log"
 readonly HOST=127.0.0.1
 readonly PORT=40000
+readonly PROXY_URL="socks5h://${HOST}:${PORT}"
 
 is_proxy_process() {
     local pid="$1" args
@@ -22,12 +23,47 @@ is_proxy_process() {
     [[ "$args" == *'warpscout socks'* ]]
 }
 
+# 输出正在运行的代理进程 PID; 未运行时返回非零.
+running_pid() {
+    local pid
+    [[ -s "$PID_FILE" ]] || return 1
+    pid="$(<"$PID_FILE")"
+    is_proxy_process "$pid" || return 1
+    printf '%s\n' "$pid"
+}
+
+wait_for_proxy() {
+    local pid="$1" attempt
+    for attempt in {1..30}; do
+        is_proxy_process "$pid" || return 1
+        if (echo >"/dev/tcp/${HOST}/${PORT}") >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+probe_exit_ip() {
+    curl -fsS --max-time 20 --socks5-hostname "${HOST}:${PORT}" https://ipinfo.io/json
+}
+
+print_exit_ip() {
+    local info
+    if info="$(probe_exit_ip 2>/dev/null)"; then
+        printf 'Exit IP: %s\n' "$info"
+    else
+        printf 'Warning: failed to query exit IP through proxy\n' >&2
+    fi
+}
+
 start_proxy() {
     local endpoint pid
     mkdir -p "$STATE_DIR"
     chmod 0700 "$STATE_DIR"
-    if [[ -s "$PID_FILE" ]] && is_proxy_process "$(<"$PID_FILE")"; then
-        printf 'Warpscout proxy already running at socks5h://%s:%s\n' "$HOST" "$PORT"
+    if pid="$(running_pid)"; then
+        printf 'Warpscout proxy already running at %s (pid=%s)\n' "$PROXY_URL" "$pid"
+        print_exit_ip
         return 0
     fi
     rm -f "$PID_FILE"
@@ -39,22 +75,34 @@ start_proxy() {
         </dev/null >>"$LOG_FILE" 2>&1 &
     pid="$!"
     printf '%s\n' "$pid" > "$PID_FILE"
+    if ! wait_for_proxy "$pid"; then
+        if is_proxy_process "$pid"; then
+            kill "$pid" 2>/dev/null || true
+            printf 'Warpscout proxy timed out waiting for %s (endpoint=%s), see %s\n' \
+                "$PROXY_URL" "$endpoint" "$LOG_FILE" >&2
+        else
+            printf 'Warpscout proxy exited during startup (endpoint=%s), see %s\n' \
+                "$endpoint" "$LOG_FILE" >&2
+        fi
+        rm -f "$PID_FILE"
+        return 1
+    fi
+    printf 'Warpscout proxy started at %s (pid=%s, endpoint=%s)\n' \
+        "$PROXY_URL" "$pid" "$endpoint"
+    print_exit_ip
 }
 
 stop_proxy() {
     local pid
-    [[ -s "$PID_FILE" ]] || return 0
-    pid="$(<"$PID_FILE")"
-    if is_proxy_process "$pid"; then kill "$pid"; fi
+    if pid="$(running_pid)"; then kill "$pid"; fi
     rm -f "$PID_FILE"
 }
 
 status_proxy() {
     local pid
-    if [[ -s "$PID_FILE" ]] && is_proxy_process "$(<"$PID_FILE")"; then
-        pid="$(<"$PID_FILE")"
-        printf 'Warpscout proxy running at socks5h://%s:%s (pid=%s)\n' "$HOST" "$PORT" "$pid"
-        printf 'Verify: curl -x socks5h://%s:%s https://ifconfig.me\n' "$HOST" "$PORT"
+    if pid="$(running_pid)"; then
+        printf 'Warpscout proxy running at %s (pid=%s)\n' "$PROXY_URL" "$pid"
+        printf 'Verify: curl --socks5-hostname %s:%s https://ifconfig.me\n' "$HOST" "$PORT"
         return 0
     fi
     printf 'Warpscout proxy is not running\n' >&2
