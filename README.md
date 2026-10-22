@@ -36,6 +36,8 @@ MCP 端点为 HTTPS `/mcp`.
 | `CODING_TOOLS_MCP_OAUTH_CLIENT_ID` | `oxzk-coding-tools-mcp` | 预注册 OAuth 客户端 ID |
 | `CODING_TOOLS_MCP_OAUTH_CLIENT_SECRET` | 内置固定值 | 预注册客户端密钥；生产环境必须覆盖 |
 | `CODING_TOOLS_MCP_OAUTH_REDIRECT_URIS` | `http://127.0.0.1/callback,http://localhost/callback` | 回调地址，逗号分隔，需与客户端实际回调一致 |
+| `CODING_TOOLS_MCP_OAUTH_TOKEN_SECRET` | 自动生成 | OAuth access token 签名密钥，hex 编码且至少 32 字节；固定后重启不会使 token 失效 |
+| `CODING_TOOLS_MCP_OAUTH_TOKEN_TTL` | `86400` | OAuth access token 有效期（秒，60–604800） |
 | `CODING_TOOLS_MCP_AUTH_TOKEN` | 自动生成 | bearer token；仅 `bearer` 模式使用 |
 | `CLOUDFLARED_TUNNEL_TOKEN` | 空 | named tunnel token；设置后优先于 quick tunnel |
 | `CLOUDFLARED_TUNNEL_URL` | `http://127.0.0.1:8765` | quick tunnel 的本地转发地址 |

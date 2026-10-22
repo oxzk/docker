@@ -1,7 +1,7 @@
 FROM oxzk/python
 
 ARG TARGETARCH
-ARG CODING_TOOLS_MCP_VERSION=0.3.0
+ARG CODING_TOOLS_MCP_VERSION=0.5.0
 
 ENV PYTHON_VENV=/opt/venv \
     PYTHONUNBUFFERED=1 \
@@ -42,6 +42,7 @@ RUN set -eux; \
     uv pip install --python "${PYTHON_VENV}/bin/python" \
         "coding-tools-mcp==${CODING_TOOLS_MCP_VERSION}"; \
     cloudflared --version; \
+    "${PYTHON_VENV}/bin/coding-tools-mcp" --version; \
     "${PYTHON_VENV}/bin/coding-tools-mcp" --help >/dev/null; \
     rm -rf /root/.cache/uv /var/lib/apt/lists/*
 
