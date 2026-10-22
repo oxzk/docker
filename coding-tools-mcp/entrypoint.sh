@@ -8,7 +8,8 @@ MCP_LOG=/tmp/coding-tools-mcp.log
 CLOUDFLARED_LOG=/tmp/cloudflared.log
 
 log() {
-    echo "[coding-tools-mcp] $*"
+    # 日志统一写 stderr：stdio 模式下 stdout 是 MCP JSON-RPC 流，不能混入日志。
+    echo "[coding-tools-mcp] $*" >&2
 }
 
 cleanup() {
